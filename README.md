@@ -64,6 +64,13 @@ siempre lo revisas antes de guardar; si no se puede leer, lo rellenas a mano.
 - Ahorro del mes = sueldo + ingresos extra - gastos reales. Las aportaciones a objetivos no restan (es dinero ahorrado).
 - "Libre tras plan e inversion" = ingresos - presupuesto - inversion mensual (campo opcional en Ajustes).
 
+## Exportar a Excel por periodo
+En Ajustes -> *Exportar a Excel por periodo*: **Hoy, Semana, Mes, Año o Todo** (eligiendo el mes o el año) y botón *Excel (.xlsx)* o *CSV*.
+- Hoja **Movimientos**: Fecha (fecha real de Excel), Tipo, Categoría u objetivo, Concepto, Importe (€), Pagó, Local, Mi parte (€). Gastos, aportaciones e inversiones en negativo; ingresos en positivo. Los gastos compartidos llevan quién pagó, el local y **tu parte**; los pagos entre vosotros entran con su signo.
+- Hoja **Resumen**: presupuesto frente a gasto real por categoría (mes, año o todo), "Compartido (mi parte)", ingresos, gastos, ahorro, invertido y aportado a objetivos. Un año o periodo en curso cuenta solo hasta el mes actual (indica "Meses contados").
+- Con modo Compartido activo se puede incluir o no. Formato español (coma decimal, tildes y ñ correctas). Genera el archivo en el móvil (SheetJS 0.18.5 desde cdnjs, queda en caché) y lo entrega con el menú Compartir.
+- Para guardar **todo** (presupuestos, grandes pagos, reglas, modo compartido y fotos) usa la *Copia completa*; el Excel/CSV es para consultar y analizar.
+
 ## Privacidad
 - Ningun dato sale del dispositivo. Este repo NO contiene datos personales ni tu Excel (`*.xlsx` esta en `.gitignore`).
 - La importacion de Excel carga SheetJS 0.18.5 desde cdnjs solo cuando pulsas importar. Esa version tiene una vulnerabilidad
@@ -78,7 +85,7 @@ siempre lo revisas antes de guardar; si no se puede leer, lo rellenas a mano.
 npm test                     # logica pura (core.js) con node --test
 python -m http.server 8099   # y abre http://127.0.0.1:8099
 ```
-Estructura: `core.js`, `shared.js`, `ticket.js` y `statement.js` (lógica, probadas) · `app.js` (individual) · `shared-ui.js` (compartido) · `ui.js` · `ocr.js` (lector de tickets) · `pdfread.js` (PDF/OCR) · `import-ui.js` (extractos) · `photos.js` (IndexedDB) · `sw.js` (offline, red primero) · `styles.css` · `index.html`.
+Estructura: `core.js`, `shared.js`, `ticket.js` y `statement.js` (lógica, probadas) · `app.js` (individual) · `shared-ui.js` (compartido) · `ui.js` · `ocr.js` (lector de tickets) · `pdfread.js` (PDF/OCR) · `import-ui.js` (extractos) · `exportxl.js` (Excel por periodo) · `backup.js` (copia completa) · `photos.js` (IndexedDB) · `sw.js` (offline, red primero) · `styles.css` · `index.html`.
 Los datos antiguos (v1) se migran solos al abrir la nueva version.
 
 ## Limitaciones

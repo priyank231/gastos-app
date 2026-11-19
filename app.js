@@ -6,6 +6,7 @@ import { $, esc, dec, banner, toast, deliver, h2, icon, avatar, APP_VERSION, upd
   setScanStatus, scanTicket, describeScan } from './ui.js';
 import * as shared from './shared-ui.js';
 import * as imp from './import-ui.js';
+import { PERIODS, XLSX_MIME, periodBounds, allDates, buildMovements, buildSummary, periodCSV, toXlsx } from './exportxl.js';
 
 const KEY = 'gastos.v1';          // misma clave: validateBackup migra los datos antiguos
 const DEFAULT_CATS = ['Vivienda', 'Suministros', 'Transporte', 'Alimentación', 'Seguros e impuestos',
@@ -205,6 +206,12 @@ function viewAjustes() {
     <label class="check"><input type="checkbox" id="sAuto" ${autoReadOn() ? 'checked' : ''}> Leer automáticamente al añadir la foto (modo compartido)</label></section>
   <section class="card set">${h2('Importar desde Excel', 'Lee la hoja "Gastos": los pagos de varias veces al año van a la media mensual; los de un solo pago anual pasan a "Grandes pagos" (repartidos según tu columna "Prorratear"); "Solo en el año" = pago de ese mes. El archivo se procesa en tu dispositivo. Importa solo archivos tuyos. Tus gastos registrados no se tocan.')}
     <input type="file" id="sXlsx" accept=".xlsx,.xlsm"></section>
+  <section class="card set">${h2('Exportar a Excel por periodo', 'Elige Hoy, Semana, Mes, Año o Todo y descarga un Excel con dos hojas: <b>Movimientos</b> (fecha, tipo, categoría, concepto, importe; en lo compartido, quién pagó, local y tu parte) y <b>Resumen</b> (presupuesto frente a gasto real por categoría, ahorro e inversión). Los gastos, aportaciones e inversiones salen en negativo. También puedes bajarlo como CSV.')}
+    <label>Periodo<select id="xPeriod">${Object.entries(PERIODS).map(([k, l]) => `<option value="${k}"${k === 'month' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label id="xMonthL">Mes<input type="month" id="xMonth" value="${localISO().slice(0, 7)}"></label>
+    <label id="xYearL" hidden>Año<input type="number" id="xYear" min="2000" max="2100" value="${new Date().getFullYear()}" inputmode="numeric"></label>
+    ${shared.hasGroup() ? '<label class="check" style="margin-top:12px"><input type="checkbox" id="xShared" checked> Incluir los gastos compartidos</label>' : ''}
+    <div class="row"><button class="btn primary" id="xXlsx">${icon('file')}Excel (.xlsx)</button><button class="btn" id="xCsv">CSV</button></div></section>
   <section class="card set">${h2('Copia de seguridad y cambio de móvil', '<b>Copia completa</b>: guarda TODO en un archivo (modo individual, modo compartido, fotos de tickets y ajustes). En el móvil nuevo: Ajustes → Restaurar copia completa. <b>CSV</b>: tus movimientos en una tabla que se abre en Excel y que esta app también puede volver a importar; no incluye presupuestos ni grandes pagos (para eso, la copia completa).')}
     <p class="small ${lastBackupDays() === null || lastBackupDays() > 30 ? 'warnmsg' : 'mut'}" id="lastBackup">${lastBackupText()}</p>
     <div class="row"><button class="btn primary" id="sFull">${icon('share')}Copia completa</button></div>
@@ -267,6 +274,10 @@ function bindAjustes() {
   document.querySelectorAll('[data-pay]').forEach((el) => { el.onclick = () => openPay(el.dataset.pay); });
   $('#sXlsx').onchange = importExcel;
   $('#sFull').onclick = exportFull;
+  const syncPeriod = () => { const k = $('#xPeriod').value; $('#xMonthL').hidden = k !== 'month'; $('#xYearL').hidden = k !== 'year'; };
+  $('#xPeriod').onchange = syncPeriod; syncPeriod();
+  $('#xXlsx').onclick = () => exportPeriod('xlsx');
+  $('#xCsv').onclick = () => exportPeriod('csv');
   $('#sCsv').onclick = () => send(`movimientos-${localISO()}.csv`, movementsCSV(data), 'text/csv');
   $('#sRestore').onchange = (e) => restoreFull(e);
   $('#sCsvIn').onchange = (e) => importCsv(e);
@@ -386,6 +397,22 @@ queueMicrotask(() => {
   const has = data.expenses.length + data.incomes.length + data.investments.length >= 5;
   if (has && (days === null || days > 30)) banner('Hace tiempo que no haces una copia completa. Ajustes → Copia de seguridad.');
 });
+
+/** Exporta el periodo elegido en Ajustes a .xlsx (dos hojas) o CSV. */
+async function exportPeriod(kind) {
+  try {
+    const sh = shared.hasGroup() ? shared.getState() : null;
+    const includeShared = !!sh && (!$('#xShared') || $('#xShared').checked);
+    const range = periodBounds($('#xPeriod').value, { today: localISO(), month: $('#xMonth').value, year: Number($('#xYear').value) }, allDates(data, sh));
+    const movements = buildMovements(data, sh, range, { includeShared });
+    if (!movements.length) return toast(`No hay movimientos en ${range.label.toLowerCase()}`);
+    if (kind === 'csv') return send(`gastos-${range.file}.csv`, periodCSV(movements), 'text/csv');
+    toast('Preparando el Excel…', null, null, 2500);
+    await loadSheetJS();
+    const buf = toXlsx(window.XLSX, { movements, summary: buildSummary(data, sh, range, { includeShared, today: localISO() }), label: range.label });
+    await send(`gastos-${range.file}.xlsx`, new Blob([buf], { type: XLSX_MIME }), XLSX_MIME);
+  } catch (err) { toast(err.message || 'No se pudo exportar', null, null, 8000); }
+}
 
 async function send(name, text, type) {
   const r = await deliver(name, text, type);

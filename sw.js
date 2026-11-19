@@ -1,8 +1,8 @@
 // Service worker: la app funciona sin conexión. Sube VERSION al cambiar archivos para forzar la actualización.
-const VERSION = 'gastos-v8';
+const VERSION = 'gastos-v9';
 const CDN_CACHE = 'gastos-cdn-1';          // lector de tickets (WASM): se guarda para usarlo sin conexión
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'ui.js', 'photos.js', 'shared.js', 'shared-ui.js',
-  'ocr.js', 'ticket.js', 'statement.js', 'pdfread.js', 'import-ui.js', 'backup.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+  'ocr.js', 'ticket.js', 'statement.js', 'pdfread.js', 'import-ui.js', 'exportxl.js', 'backup.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -22,7 +22,7 @@ self.addEventListener('fetch', (e) => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
       return res;
     }).catch(() => caches.match(e.request)));
-  } else if (url.hostname === 'cdn.jsdelivr.net') {
+  } else if ((url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'cdnjs.cloudflare.com')) {
     // Versiones fijadas e inmutables: caché primero.
     e.respondWith(caches.open(CDN_CACHE).then(async (c) => {
       const hit = await c.match(e.request);

@@ -4,7 +4,7 @@ import { eur } from './core.js';
 export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const dec = (n) => String(n).replace('.', ',');
-export const APP_VERSION = '8';
+export const APP_VERSION = '9';
 export const icon = (name, cls = '') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 /** Círculo de color con la inicial (color estable según el nombre). */
@@ -73,7 +73,7 @@ function downloadBlob(name, blob) {
  * si no, lo descarga. Devuelve 'shared' | 'downloaded' | 'cancelled'.
  */
 export async function deliver(name, text, type) {
-  const blob = new Blob([text], { type: `${type};charset=utf-8` });
+  const blob = text instanceof Blob ? text : new Blob([text], { type: `${type};charset=utf-8` });
   try {
     const file = new File([blob], name, { type });
     if (navigator.canShare?.({ files: [file] })) {
