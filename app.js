@@ -116,8 +116,7 @@ function viewMes() {
   }
   const barCls = s.pct >= 1 ? 'bad' : s.pct >= 0.85 ? 'warn' : '';
   const onboarding = data.categories.length === 0 && data.payments.length === 0
-    ? `<div class="card"><h2>Empieza aqui</h2><p>Aun no hay plan de presupuesto. En <b>Ajustes</b> puedes importar tu Excel
-       (hoja "Gastos") o escribir el presupuesto mensual de cada categoria. Con el boton + anades gastos, ingresos extra o aportaciones.</p></div>` : '';
+    ? `<div class="card">${h2('Empieza aqui', 'Aun no hay plan de presupuesto. En <b>Ajustes</b> puedes importar tu Excel (hoja "Gastos") o escribir el presupuesto mensual de cada categoria. Con el boton + anades gastos, ingresos extra o aportaciones.')}</div>` : '';
   const rows = s.rows.map((r) => {
     const p = r.budget > 0 ? Math.min(100, (r.spent / r.budget) * 100) : (r.spent > 0 ? 100 : 0);
     const bc = r.over ? 'bad' : r.pct >= 0.85 ? 'warn' : '';
