@@ -1,5 +1,7 @@
 import { MONTHS, SPREADS, eur, round2, pad, uid, localISO, defaultData, parseAmount, parsePlan, monthSummary,
-  savingsStats, goalTotals, expensesCSV, validateBackup, daysInMonth } from './core.js';
+  savingsStats, goalTotals, movementsCSV, parseMovementsCSV, applyMovements, renameCategory, deleteCategory, categoryUse, validateBackup, daysInMonth } from './core.js';
+import { buildBackup, parseBackup, describeBackup } from './backup.js';
+import { putPhoto, getPhoto, blobToDataURL, dataURLToBlob } from './photos.js';
 import { $, esc, dec, banner, toast, deliver, h2, icon, avatar, APP_VERSION, updateApp, autoReadOn, setAutoRead,
   setScanStatus, scanTicket, describeScan } from './ui.js';
 import * as shared from './shared-ui.js';
@@ -173,15 +175,19 @@ function viewHist() {
 }
 
 function viewAjustes() {
-  const cats = data.categories.map((c, i) => `<div class="budget-row"><span>${esc(c.name)}</span>
-    <input data-cat="${i}" inputmode="decimal" aria-label="Presupuesto mensual de ${esc(c.name)}" value="${dec(c.budget)}"></div>`).join('');
+  const cats = data.categories.map((c, i) => `<div class="cat-edit">
+    <input class="cname" data-cname="${i}" maxlength="40" aria-label="Nombre de la categoría" value="${esc(c.name)}">
+    <input class="cbud" data-cat="${i}" inputmode="decimal" aria-label="Presupuesto mensual de ${esc(c.name)}" value="${dec(c.budget)}">
+    <button class="icon-btn sm" data-delcat="${i}" aria-label="Borrar ${esc(c.name)}"><svg class="ic"><use href="#i-trash"/></svg></button></div>`).join('');
+  const budgetTotal = round2(data.categories.reduce((a, c) => a + c.budget, 0));
   const pays = data.payments.map((p) => `<button class="item" data-pay="${esc(p.id)}"><span>${avatar(p.category)}<span><span class="t">${esc(p.name)}</span><small>${esc(p.category)} · ${MONTHS[p.month - 1]} ${p.year}${p.repeat ? ' (cada año)' : ''} · ${spreadLabel(p.spread)}</small></span></span><b>${eur(p.amount)}</b></button>`).join('');
   const goals = data.goals.map((g) => `<div class="budget-row"><span>${esc(g.name)} <button class="link" data-delgoal="${esc(g.id)}">quitar</button></span>
     <input data-goal="${esc(g.id)}" inputmode="decimal" aria-label="Meta de ${esc(g.name)}" placeholder="meta €" value="${g.target ? dec(g.target) : ''}"></div>`).join('');
   return `<section class="card set"><h2>Plan mensual</h2>
     <label>Sueldo / ingreso neto mensual (€)<input id="sIncome" inputmode="decimal" value="${data.income ? dec(data.income) : ''}"></label>
     <label>Inversión mensual (€) · se resta del libre<input id="sInvest" inputmode="decimal" value="${data.investment ? dec(data.investment) : ''}"></label>
-    ${h2('Presupuesto mensual por categoría', 'Lo que quieres gastar al mes en cada categoría. Puedes importarlo del Excel o escribirlo a mano.', 'margin-top:18px')}${cats}
+    ${h2('Categorías y presupuesto mensual', 'Escribe encima del nombre para renombrar una categoría (se actualiza en todos sus gastos) o cambia su presupuesto. El icono de la papelera la borra: sus gastos se mueven a la categoría que elijas, no se pierde ninguno. Todo se guarda al escribir.', 'margin-top:18px')}${cats}
+    ${data.categories.length ? `<div class="total-line"><span>Presupuesto total al mes</span><b>${eur(budgetTotal)}</b></div>` : ''}
     <div class="row"><input id="sNewCat" placeholder="Nueva categoría" maxlength="40"><button class="btn" id="sAddCat">Añadir</button></div></section>
   <section class="card set">${h2('Grandes pagos', 'Seguro, ITV, vacaciones... Elige si se reparte en 12 meses, en 6 o solo en el mes del pago.')}
     ${pays}
@@ -199,9 +205,12 @@ function viewAjustes() {
     <label class="check"><input type="checkbox" id="sAuto" ${autoReadOn() ? 'checked' : ''}> Leer automáticamente al añadir la foto (modo compartido)</label></section>
   <section class="card set">${h2('Importar desde Excel', 'Lee la hoja "Gastos": los pagos de varias veces al año van a la media mensual; los de un solo pago anual pasan a "Grandes pagos" (repartidos según tu columna "Prorratear"); "Solo en el año" = pago de ese mes. El archivo se procesa en tu dispositivo. Importa solo archivos tuyos. Tus gastos registrados no se tocan.')}
     <input type="file" id="sXlsx" accept=".xlsx,.xlsm"></section>
-  <section class="card set">${h2('Copia de seguridad', 'Los datos viven solo en este dispositivo. Haz copia de vez en cuando.')}
-    <div class="row"><button class="btn" id="sCsv">Exportar movimientos (CSV)</button><button class="btn" id="sJson">Copia completa (JSON)</button></div>
-    <label style="margin-top:14px">Restaurar copia (JSON)<input type="file" id="sRestore" accept=".json,application/json"></label></section>
+  <section class="card set">${h2('Copia de seguridad y cambio de móvil', '<b>Copia completa</b>: guarda TODO en un archivo (modo individual, modo compartido, fotos de tickets y ajustes). En el móvil nuevo: Ajustes → Restaurar copia completa. <b>CSV</b>: tus movimientos en una tabla que se abre en Excel y que esta app también puede volver a importar; no incluye presupuestos ni grandes pagos (para eso, la copia completa).')}
+    <p class="small ${lastBackupDays() === null || lastBackupDays() > 30 ? 'warnmsg' : 'mut'}" id="lastBackup">${lastBackupText()}</p>
+    <div class="row"><button class="btn primary" id="sFull">${icon('share')}Copia completa</button></div>
+    <div class="row"><button class="btn" id="sCsv">Exportar CSV (Excel)</button></div>
+    <label style="margin-top:14px">Restaurar copia completa<input type="file" id="sRestore" accept=".json,application/json,text/plain"></label>
+    <label>Importar movimientos desde CSV<input type="file" id="sCsvIn" accept=".csv,text/csv,text/plain"></label></section>
   <section class="card set"><h2>Zona de riesgo</h2>
     <button class="btn danger" id="sWipe" style="width:100%">Borrar todos los datos</button></section>
   <p class="ver">Versión ${APP_VERSION}</p>`;
@@ -209,17 +218,29 @@ function viewAjustes() {
 
 function bindAjustes() {
   const num = (el) => { const t = el.value.trim(); if (t === '') return 0; const n = Number(t.replace(',', '.')); return Number.isFinite(n) && n >= 0 ? round2(n) : null; };
-  $('#sIncome').onchange = (e) => { const n = num(e.target); if (n === null) return toast('Importe no válido'); data.income = n; save(); };
-  $('#sInvest').onchange = (e) => { const n = num(e.target); if (n === null) return toast('Importe no válido'); data.investment = n; save(); };
-  $('#sFrom').onchange = (e) => { data.savingsFrom = e.target.value; save(); };
+  // Los importes se guardan MIENTRAS se escribe (en iPhone un campo puede no avisar de su cambio al tocar otra pestaña).
+  const bindNum = (el, apply) => {
+    el.addEventListener('input', () => { const n = num(el); if (n !== null) { apply(n); save(); } });
+    el.addEventListener('change', () => { if (num(el) === null) toast('Importe no válido'); });
+  };
+  bindNum($('#sIncome'), (n) => { data.income = n; });
+  bindNum($('#sInvest'), (n) => { data.investment = n; });
+  $('#sFrom').addEventListener('input', (e) => { data.savingsFrom = e.target.value; save(); });
+  $('#sFrom').addEventListener('change', (e) => { data.savingsFrom = e.target.value; save(); });
   $('#sAuto').onchange = (e) => setAutoRead(e.target.checked);
   $('#sIncShared').onchange = (e) => { data.includeShared = e.target.checked; save(); };
-  document.querySelectorAll('[data-cat]').forEach((el) => {
-    el.onchange = () => { const n = num(el); if (n === null) return toast('Importe no válido'); data.categories[Number(el.dataset.cat)].budget = n; save(); };
+  document.querySelectorAll('[data-cat]').forEach((el) => bindNum(el, (n) => { data.categories[Number(el.dataset.cat)].budget = n; }));
+  document.querySelectorAll('[data-cname]').forEach((el) => {
+    el.addEventListener('change', () => {
+      const cat = data.categories[Number(el.dataset.cname)];
+      const r = renameCategory(data, cat.name, el.value);
+      if (!r.ok) { toast(r.error); el.value = cat.name; return; }
+      if (r.changed) toast(`Renombrada (${r.changed} elementos actualizados)`);
+      save();
+    });
   });
-  document.querySelectorAll('[data-goal]').forEach((el) => {
-    el.onchange = () => { const n = num(el); if (n === null) return toast('Importe no válido'); data.goals.find((g) => g.id === el.dataset.goal).target = n; save(); };
-  });
+  document.querySelectorAll('[data-delcat]').forEach((el) => { el.onclick = () => openDelCat(data.categories[Number(el.dataset.delcat)].name); });
+  document.querySelectorAll('[data-goal]').forEach((el) => bindNum(el, (n) => { data.goals.find((g) => g.id === el.dataset.goal).target = n; }));
   document.querySelectorAll('[data-delgoal]').forEach((el) => {
     el.onclick = () => {
       const g = data.goals.find((x) => x.id === el.dataset.delgoal);
@@ -245,22 +266,126 @@ function bindAjustes() {
   $('#sAddPay').onclick = () => openPay();
   document.querySelectorAll('[data-pay]').forEach((el) => { el.onclick = () => openPay(el.dataset.pay); });
   $('#sXlsx').onchange = importExcel;
-  $('#sCsv').onclick = () => send('movimientos.csv', expensesCSV(data), 'text/csv');
-  $('#sJson').onclick = () => send(`gastos-copia-${localISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
-  $('#sRestore').onchange = async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    try {
-      const d = validateBackup(JSON.parse(await f.text()));
-      if (!confirm(`¿Restaurar ${d.expenses.length} gastos, ${d.incomes.length} ingresos extra y ${d.categories.length} categorías? Sustituye los datos actuales.`)) return;
-      data = d; save(); render(); toast('Copia restaurada');
-    } catch { toast('Archivo no válido'); }
-  };
+  $('#sFull').onclick = exportFull;
+  $('#sCsv').onclick = () => send(`movimientos-${localISO()}.csv`, movementsCSV(data), 'text/csv');
+  $('#sRestore').onchange = (e) => restoreFull(e);
+  $('#sCsvIn').onchange = (e) => importCsv(e);
   $('#sWipe').onclick = () => {
     if (prompt('Se borrarán TODOS los datos de este dispositivo. Escribe BORRAR para confirmar') === 'BORRAR') {
       data = defaultData(); save(); render(); toast('Datos borrados');
     }
   };
 }
+
+// ---------- copia de seguridad ----------
+const LAST_BACKUP = 'gastos.lastbackup';
+function lastBackupDays() {
+  try {
+    const t = localStorage.getItem(LAST_BACKUP);
+    return t ? Math.floor((Date.now() - Date.parse(t)) / 86400000) : null;
+  } catch { return null; }
+}
+function lastBackupText() {
+  const d = lastBackupDays();
+  if (d === null) return 'Aún no has hecho ninguna copia completa en este móvil.';
+  return d === 0 ? 'Última copia completa: hoy.' : `Última copia completa: hace ${d} día${d === 1 ? '' : 's'}.`;
+}
+function markBackup() { try { localStorage.setItem(LAST_BACKUP, new Date().toISOString()); } catch { /* opcional */ } }
+
+async function exportFull() {
+  try {
+    const sh = shared.getState();
+    const photos = {};
+    for (const e of sh.entries) {
+      if (e.photoId && !photos[e.photoId]) {
+        const blob = await getPhoto(e.photoId);
+        if (blob) photos[e.photoId] = await blobToDataURL(blob);
+      }
+    }
+    const backup = buildBackup({ individual: data, shared: sh, photos, settings: { autoRead: autoReadOn() } });
+    const r = await deliver(`gastos-copia-completa-${localISO()}.json`, JSON.stringify(backup), 'application/json');
+    if (r === 'cancelled') return;
+    markBackup();
+    toast(r === 'shared' ? 'Copia enviada. Guárdala en un sitio seguro.' : 'Copia descargada (busca en Descargas / Archivos).', null, null, 8000);
+    if (tab === 'ajustes') render();
+  } catch { toast('No se pudo crear la copia'); }
+}
+
+async function restoreFull(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  try {
+    const b = parseBackup(JSON.parse(await f.text()));
+    if (!confirm(`¿Restaurar esta copia? Contiene: ${describeBackup(b)}.\n\nSustituye los datos actuales de este móvil.`)) return;
+    data = b.individual; save();
+    if (b.shared) shared.setState(b.shared);
+    for (const [id, url] of Object.entries(b.photos)) await putPhoto(id, await dataURLToBlob(url)).catch(() => {});
+    if (b.kind === 'completa') setAutoRead(b.settings.autoRead);
+    render();
+    toast('Copia restaurada', null, null, 8000);
+  } catch (err) { toast(err instanceof SyntaxError ? 'El archivo no es una copia válida' : (err.message || 'Archivo no válido'), null, null, 8000); }
+  finally { ev.target.value = ''; }
+}
+
+async function importCsv(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  try {
+    const { rows, errors } = parseMovementsCSV(await f.text());
+    if (!rows.length) { toast(errors[0] || 'No hay movimientos que importar', null, null, 8000); return; }
+    if (!confirm(`Se encontraron ${rows.length} movimientos${errors.length ? ` (${errors.length} líneas no se pudieron leer)` : ''}.\nLos que ya tengas (mismo tipo, fecha, importe y concepto) se omiten. ¿Importar?`)) return;
+    const r = applyMovements(data, rows);
+    save(); render();
+    const bits = [['gastos', r.expense], ['ingresos', r.income], ['aportaciones', r.goal], ['inversiones', r.invest]].filter(([, n]) => n).map(([l, n]) => `${n} ${l}`);
+    toast(`Importado: ${bits.join(', ') || 'nada nuevo'}${r.skipped ? ` · ${r.skipped} ya estaban` : ''}`, null, null, 8000);
+  } catch { toast('No se pudo leer el CSV'); }
+  finally { ev.target.value = ''; }
+}
+
+// ---------- borrar categoría (con destino para sus gastos) ----------
+const dlgCat = $('#dlgCat');
+let delCatName = '';
+function openDelCat(name) {
+  delCatName = name;
+  const use = categoryUse(data, name);
+  $('#catTitle').textContent = `Borrar «${name}»`;
+  const parts = [];
+  if (use.expenses) parts.push(`${use.expenses} gasto${use.expenses === 1 ? '' : 's'}`);
+  if (use.payments) parts.push(`${use.payments} gran${use.payments === 1 ? '' : 'des'} pago${use.payments === 1 ? '' : 's'}`);
+  $('#catInfo').textContent = parts.length
+    ? `Tiene ${parts.join(' y ')}. Se moverán a la categoría que elijas: no se pierde ninguno.`
+    : 'No tiene gastos: se borra sin más.';
+  const others = data.categories.map((c) => c.name).filter((n) => n !== name);
+  const opts = [...others];
+  if (!opts.some((n) => n.toLowerCase() === 'otros')) opts.push('Otros');
+  $('#catTarget').replaceChildren(...opts.map((n) => Object.assign(document.createElement('option'), { value: n, textContent: n === 'Otros' && !others.includes('Otros') ? 'Otros (nueva)' : n })));
+  $('#catTarget').value = others.find((n) => n.toLowerCase() === 'otros') || others[0] || 'Otros';
+  dlgCat.showModal();
+}
+$('#catForm').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const snapshot = JSON.stringify(data);
+  const r = deleteCategory(data, delCatName, $('#catTarget').value);
+  dlgCat.close();
+  if (!r.ok) { toast(r.error); return; }
+  save(); render();
+  toast(r.moved ? `Categoría borrada · ${r.moved} elementos movidos a «${r.target}»` : 'Categoría borrada', 'Deshacer',
+    () => { data = validateBackup(JSON.parse(snapshot)); save(); render(); }, 9000);
+});
+$('#catCancel').onclick = () => dlgCat.close();
+
+// Al tocar fuera de un campo, se "cierra" el campo (así se guarda lo escrito aunque el móvil no avise del cambio).
+document.addEventListener('pointerdown', (e) => {
+  const a = document.activeElement;
+  if (a && a !== e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && !e.target.closest('input,select,textarea,label')) a.blur();
+}, true);
+
+// Recordatorio suave de copia de seguridad
+queueMicrotask(() => {
+  const days = lastBackupDays();
+  const has = data.expenses.length + data.incomes.length + data.investments.length >= 5;
+  if (has && (days === null || days > 30)) banner('Hace tiempo que no haces una copia completa. Ajustes → Copia de seguridad.');
+});
 
 async function send(name, text, type) {
   const r = await deliver(name, text, type);

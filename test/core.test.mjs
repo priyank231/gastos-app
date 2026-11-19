@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { round2, parseAmount, parsePlan, paymentShare, monthSummary, savingsStats, goalTotals, defaultData,
-  expensesCSV, validateBackup, daysInMonth } from '../core.js';
+  movementsCSV, parseMovementsCSV, applyMovements, renameCategory, deleteCategory, categoryUse, validateBackup, daysInMonth } from '../core.js';
 
 test('parseAmount: coma, punto y rechazos', () => {
   assert.equal(parseAmount('12,5'), 12.5);
@@ -107,14 +107,96 @@ test('savingsStats: promedio de meses completos, sin el mes en curso', () => {
   assert.equal(savingsStats({ ...late, savingsFrom: '2026-09' }, '2026-11-19').months[0].m, 9);
 });
 
-test('goalTotals y expensesCSV', () => {
-  const d = sample();
-  const g = goalTotals(d)[0];
+test('goalTotals', () => {
+  const g = goalTotals(sample())[0];
   assert.equal(g.total, 150);
   assert.equal(g.pct, 0.15);
-  const csv = expensesCSV({ ...defaultData(), expenses: [{ date: '2026-10-01', amount: 5, category: 'Ocio', concept: 'cena "buena"' }] });
-  assert.equal(csv.split('\n')[1], '2026-10-01,gasto,-5.00,"Ocio","cena ""buena"""');
-  assert.ok(expensesCSV(d).includes('ingreso extra,550.00'));
+});
+
+test('CSV de movimientos: cabecera en español, ; y coma decimal, importes con signo, BOM', () => {
+  const d = sample();
+  d.investments = [{ id: 'i', date: '2026-10-08', amount: 40, concept: 'ETF' }];
+  const csv = movementsCSV(d);
+  assert.ok(csv.startsWith('﻿Fecha;Mes;Tipo;Categoría u objetivo;Concepto;Importe (€)\r\n'));
+  const lines = csv.trim().split('\r\n');
+  assert.ok(lines.includes('2026-10-02;2026-10;Gasto;"Vivienda";"";-60,00'));
+  assert.ok(lines.includes('2026-10-15;2026-10;Ingreso;"";"Salidas PeM";550,00'));
+  assert.ok(lines.includes('2026-10-20;2026-10;Aportación a objetivo;"Viaje";"";-150,00'));
+  assert.ok(lines.includes('2026-10-08;2026-10;Inversión;"";"ETF";-40,00'));
+  const sorted = lines.slice(1).map((l) => l.slice(0, 10));
+  assert.deepEqual(sorted, [...sorted].sort());                     // ordenado por fecha
+});
+
+test('CSV: ida y vuelta (comillas, ; y comas dentro del texto) sin perder ni duplicar nada', () => {
+  const d = sample();
+  d.expenses.push({ id: 'q', date: '2026-10-09', amount: 1234.5, category: 'Ocio', concept: 'cena "buena"; con, comas' });
+  d.investments = [{ id: 'i', date: '2026-10-08', amount: 40, concept: 'ETF' }];
+  const parsed = parseMovementsCSV(movementsCSV(d));
+  assert.deepEqual(parsed.errors, []);
+  assert.equal(parsed.rows.length, d.expenses.length + d.incomes.length + d.contributions.length + d.investments.length);
+  const big = parsed.rows.find((r) => r.amount === 1234.5);
+  assert.deepEqual([big.kind, big.category, big.concept], ['expense', 'Ocio', 'cena "buena"; con, comas']);
+  // restaurar en un móvil vacío
+  const fresh = defaultData();
+  const r = applyMovements(fresh, parsed.rows);
+  assert.deepEqual([r.expense, r.income, r.goal, r.invest, r.skipped], [d.expenses.length, 1, 1, 1, 0]);
+  assert.equal(fresh.goals[0].name, 'Viaje');                         // el objetivo se crea con su nombre
+  assert.ok(fresh.categories.some((c) => c.name === 'Ocio'));         // y las categorías que faltaban
+  assert.equal(fresh.contributions[0].amount, 150);
+  // importar dos veces no duplica
+  const again = applyMovements(fresh, parsed.rows);
+  assert.equal(again.skipped, parsed.rows.length);
+  assert.equal(fresh.expenses.length, d.expenses.length);
+});
+
+test('CSV: acepta ; o , , importes con punto de miles y avisa de las líneas ilegibles', () => {
+  const csv = 'fecha,tipo,categoria,concepto,importe\n2026-10-01,Gasto,Ocio,cine,"-1.234,50"\n2026-10-02,Ingreso,,regalo,50\nmal,Gasto,Ocio,x,5\n2026-10-03,Otro,Ocio,x,5\n';
+  const r = parseMovementsCSV(csv);
+  assert.deepEqual(r.rows.map((x) => [x.kind, x.amount]), [['expense', 1234.5], ['income', 50]]);
+  assert.equal(r.errors.length, 2);
+  assert.equal(parseMovementsCSV('hola').rows.length, 0);
+  assert.match(parseMovementsCSV('a;b;c\n1;2;3').errors[0], /columnas/);
+  assert.match(parseMovementsCSV('').errors[0], /vacío/);
+});
+
+test('renombrar categoría: se actualiza en presupuesto, gastos, grandes pagos y reglas', () => {
+  const d = sample();
+  d.categories = [{ name: 'Ocio', budget: 100 }, { name: 'Casa', budget: 50 }];
+  d.expenses = [{ id: 'a', date: '2026-10-02', amount: 5, category: 'Ocio', concept: '' }, { id: 'b', date: '2026-10-03', amount: 7, category: 'Casa', concept: '' }];
+  d.payments = [{ id: 'p', name: 'Viaje', category: 'Ocio', amount: 100, month: 5, year: 2026, spread: 1, repeat: false }];
+  d.rules = [{ key: 'cine', kind: 'expense', category: 'Ocio' }];
+  const r = renameCategory(d, 'Ocio', 'Tiempo libre');
+  assert.deepEqual([r.ok, r.changed], [true, 3]);
+  assert.deepEqual(d.categories.map((c) => c.name), ['Tiempo libre', 'Casa']);
+  assert.equal(d.expenses[0].category, 'Tiempo libre');
+  assert.equal(d.expenses[1].category, 'Casa');
+  assert.equal(d.payments[0].category, 'Tiempo libre');
+  assert.equal(d.rules[0].category, 'Tiempo libre');
+  assert.equal(d.categories[0].budget, 100);                          // el presupuesto se conserva
+  assert.equal(renameCategory(d, 'Casa', ' tiempo LIBRE ').ok, false); // duplicado (sin importar mayúsculas/espacios)
+  assert.equal(renameCategory(d, 'Casa', '   ').ok, false);
+  assert.equal(renameCategory(d, 'No existe', 'X').ok, false);
+  assert.deepEqual(renameCategory(d, 'Casa', 'Casa'), { ok: true, changed: 0 });
+});
+
+test('borrar categoría: nunca se pierden los gastos, se mueven a la elegida', () => {
+  const d = sample();
+  d.categories = [{ name: 'Ocio', budget: 100 }, { name: 'Casa', budget: 50 }];
+  d.expenses = [{ id: 'a', date: '2026-10-02', amount: 5, category: 'Ocio', concept: '' }, { id: 'b', date: '2026-10-03', amount: 7, category: 'Ocio', concept: '' }];
+  d.payments = [{ id: 'p', name: 'Viaje', category: 'Ocio', amount: 100, month: 5, year: 2026, spread: 1, repeat: false }];
+  assert.deepEqual(categoryUse(d, 'Ocio'), { expenses: 2, payments: 1, rules: 0 });
+  const r = deleteCategory(d, 'Ocio', 'Casa');
+  assert.deepEqual([r.ok, r.moved, r.target], [true, 3, 'Casa']);
+  assert.deepEqual(d.categories.map((c) => c.name), ['Casa']);
+  assert.ok(d.expenses.every((e) => e.category === 'Casa'));
+  assert.equal(d.payments[0].category, 'Casa');
+  assert.equal(monthSummary(d, 2026, 10, '2026-10-20').spent, 12);    // el gasto sigue contando
+  // sin destino: se crea "Otros" con presupuesto 0
+  const e = deleteCategory(d, 'Casa', '');
+  assert.deepEqual([e.ok, e.target], [true, 'Otros']);
+  assert.deepEqual(d.categories, [{ name: 'Otros', budget: 0 }]);
+  assert.equal(deleteCategory(d, 'Otros', 'otros').ok, false);        // no se puede mover a sí misma
+  assert.equal(deleteCategory(d, 'Nada', 'Otros').ok, false);
 });
 
 test('validateBackup: filtra basura, valida y migra datos v1', () => {

@@ -171,17 +171,143 @@ export function goalTotals(data) {
   });
 }
 
-export function expensesCSV(data) {
-  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+// ---------- categorías ----------
+const normName = (s) => String(s).trim().toLowerCase();
+
+/** Cuántos movimientos usan una categoría (para avisar antes de borrarla). */
+export function categoryUse(data, name) {
+  return {
+    expenses: data.expenses.filter((e) => e.category === name).length,
+    payments: data.payments.filter((p) => p.category === name).length,
+    rules: data.rules.filter((r) => r.category === name).length,
+  };
+}
+
+/** Renombra una categoría en TODAS partes (presupuesto, gastos, grandes pagos, reglas aprendidas). */
+export function renameCategory(data, from, to) {
+  const name = String(to).trim().slice(0, 40);
+  if (!name) return { ok: false, error: 'El nombre no puede estar vacío' };
+  const cat = data.categories.find((c) => c.name === from);
+  if (!cat) return { ok: false, error: 'La categoría ya no existe' };
+  if (name === from) return { ok: true, changed: 0 };
+  if (data.categories.some((c) => c !== cat && normName(c.name) === normName(name))) return { ok: false, error: 'Ya existe una categoría con ese nombre' };
+  cat.name = name;
+  let changed = 0;
+  for (const list of [data.expenses, data.payments, data.rules]) for (const x of list) if (x.category === from) { x.category = name; changed++; }
+  return { ok: true, changed };
+}
+
+/**
+ * Borra una categoría y mueve sus gastos, grandes pagos y reglas a `target` (que se crea con presupuesto 0 si no existe).
+ * Los gastos NUNCA se pierden.
+ */
+export function deleteCategory(data, name, target) {
+  const to = String(target || 'Otros').trim().slice(0, 40) || 'Otros';
+  if (normName(to) === normName(name)) return { ok: false, error: 'Elige otra categoría para mover los gastos' };
+  const i = data.categories.findIndex((c) => c.name === name);
+  if (i < 0) return { ok: false, error: 'La categoría ya no existe' };
+  data.categories.splice(i, 1);
+  if (!data.categories.some((c) => normName(c.name) === normName(to))) data.categories.push({ name: to, budget: 0 });
+  const dest = data.categories.find((c) => normName(c.name) === normName(to)).name;
+  let moved = 0;
+  for (const list of [data.expenses, data.payments, data.rules]) for (const x of list) if (x.category === name) { x.category = dest; moved++; }
+  return { ok: true, moved, target: dest };
+}
+
+// ---------- CSV de movimientos (se abre bien en Excel en español y se puede volver a importar) ----------
+export const CSV_HEADER = ['Fecha', 'Mes', 'Tipo', 'Categoría u objetivo', 'Concepto', 'Importe (€)'];
+export const CSV_TYPES = { expense: 'Gasto', income: 'Ingreso', goal: 'Aportación a objetivo', invest: 'Inversión' };
+const csvText = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+const csvNum = (n) => n.toFixed(2).replace('.', ',');
+
+/** Todos los movimientos del modo individual. Importe con signo: gastos, aportaciones e inversiones en negativo. */
+export function movementsCSV(data) {
   const goalName = new Map(data.goals.map((g) => [g.id, g.name]));
   const rows = [
-    ...data.expenses.map((e) => ({ date: e.date, tipo: 'gasto', amount: -e.amount, cat: e.category, concept: e.concept })),
-    ...data.incomes.map((i) => ({ date: i.date, tipo: 'ingreso extra', amount: i.amount, cat: '', concept: i.concept })),
-    ...data.contributions.map((c) => ({ date: c.date, tipo: 'aportacion', amount: -c.amount, cat: goalName.get(c.goalId) || '', concept: c.concept || '' })),
-    ...(data.investments || []).map((i) => ({ date: i.date, tipo: 'inversion', amount: -i.amount, cat: '', concept: i.concept || '' })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
-  return ['fecha,tipo,importe,categoria_u_objetivo,concepto',
-    ...rows.map((r) => [r.date, r.tipo, r.amount.toFixed(2), q(r.cat), q(r.concept)].join(','))].join('\n');
+    ...data.expenses.map((e) => ({ date: e.date, type: CSV_TYPES.expense, cat: e.category, concept: e.concept, amount: -e.amount })),
+    ...data.incomes.map((i) => ({ date: i.date, type: CSV_TYPES.income, cat: '', concept: i.concept, amount: i.amount })),
+    ...data.contributions.map((c) => ({ date: c.date, type: CSV_TYPES.goal, cat: goalName.get(c.goalId) || '', concept: c.concept || '', amount: -c.amount })),
+    ...data.investments.map((i) => ({ date: i.date, type: CSV_TYPES.invest, cat: '', concept: i.concept || '', amount: -i.amount })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+  const lines = [CSV_HEADER.join(';'), ...rows.map((r) => [r.date, r.date.slice(0, 7), r.type, csvText(r.cat), csvText(r.concept), csvNum(r.amount)].join(';'))];
+  return `\ufeff${lines.join('\r\n')}\r\n`;
+}
+
+/** Trocea una línea CSV respetando comillas ("" = comilla). */
+function splitCSVLine(line, delim) {
+  const out = [];
+  let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+const plain = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const TYPE_KEYS = { gasto: 'expense', ingreso: 'income', 'aportacion a objetivo': 'goal', aportacion: 'goal', inversion: 'invest' };
+
+/** "1.234,50", "-42,5" o "42.5" -> número; NaN si no es un importe. */
+export function parseNumberES(s) {
+  let t = String(s).replace(/[€\s]/g, '');
+  if (!t) return NaN;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+}
+
+/** Lee el CSV que genera `movementsCSV` (separador ; o ,). Devuelve { rows, errors:[texto] }. */
+export function parseMovementsCSV(text) {
+  const lines = String(text).replace(/^\ufeff/, '').split(/\r?\n/).filter((l) => l.trim());
+  const rows = [], errors = [];
+  if (!lines.length) return { rows, errors: ['El archivo está vacío'] };
+  const delim = lines[0].includes(';') ? ';' : ',';
+  const head = splitCSVLine(lines[0], delim).map(plain);
+  const col = (...names) => head.findIndex((h) => names.some((n) => h.startsWith(n)));
+  const ci = { date: col('fecha'), type: col('tipo'), cat: col('categoria'), concept: col('concepto'), amount: col('importe') };
+  if (ci.date < 0 || ci.type < 0 || ci.amount < 0) return { rows, errors: ['No reconozco las columnas (se esperan Fecha, Tipo e Importe)'] };
+  lines.slice(1).forEach((line, n) => {
+    const f = splitCSVLine(line, delim);
+    const date = (f[ci.date] || '').trim();
+    const kind = TYPE_KEYS[plain(f[ci.type] || '')];
+    const amount = parseNumberES(f[ci.amount] || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !kind || !Number.isFinite(amount) || amount === 0) { errors.push(`Línea ${n + 2}: no se pudo leer`); return; }
+    rows.push({ date, kind, category: (f[ci.cat] || '').trim().slice(0, 40), concept: (f[ci.concept] || '').trim().slice(0, 80), amount: round2(Math.abs(amount)) });
+  });
+  return { rows, errors };
+}
+
+/** Añade las filas leídas del CSV sin duplicar lo que ya hay (mismo tipo, fecha, importe y concepto). */
+export function applyMovements(data, rows) {
+  const key = (k, d, a, c) => `${k}|${d}|${a.toFixed(2)}|${plain(c)}`;
+  const have = new Set([
+    ...data.expenses.map((e) => key('expense', e.date, e.amount, e.concept)),
+    ...data.incomes.map((i) => key('income', i.date, i.amount, i.concept)),
+    ...data.contributions.map((c) => key('goal', c.date, c.amount, c.concept || '')),
+    ...data.investments.map((i) => key('invest', i.date, i.amount, i.concept)),
+  ]);
+  const res = { expense: 0, income: 0, goal: 0, invest: 0, skipped: 0 };
+  for (const r of rows) {
+    const k = key(r.kind, r.date, r.amount, r.concept);
+    if (have.has(k)) { res.skipped++; continue; }
+    have.add(k);
+    if (r.kind === 'expense') {
+      data.expenses.push({ id: uid(), date: r.date, amount: r.amount, category: r.category || 'Otros', concept: r.concept });
+      const cat = r.category || 'Otros';
+      if (!data.categories.some((c) => plain(c.name) === plain(cat))) data.categories.push({ name: cat, budget: 0 });
+    } else if (r.kind === 'income') data.incomes.push({ id: uid(), date: r.date, amount: r.amount, concept: r.concept });
+    else if (r.kind === 'invest') data.investments.push({ id: uid(), date: r.date, amount: r.amount, concept: r.concept });
+    else {
+      let g = data.goals.find((x) => plain(x.name) === plain(r.category || 'Ahorro'));
+      if (!g) { g = { id: uid(), name: r.category || 'Ahorro', target: 0 }; data.goals.push(g); }
+      data.contributions.push({ id: uid(), goalId: g.id, date: r.date, amount: r.amount, concept: r.concept });
+    }
+    res[r.kind]++;
+  }
+  return res;
 }
 
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);

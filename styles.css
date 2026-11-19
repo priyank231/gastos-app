@@ -143,6 +143,13 @@ dialog.sheet.tall{height:96vh;height:96dvh}
 .mv-ctl select.kind{flex:1.1}.mv-ctl select.cat{flex:1}
 .mv-note{font-size:12.5px;color:var(--mut);margin-top:6px}.mv-note.warn{color:var(--warn)}
 
+/* ===== Categorías editables ===== */
+.cat-edit{display:grid;grid-template-columns:1fr 96px 44px;gap:8px;align-items:center;margin:8px 0}
+.cat-edit input{min-height:44px}.cat-edit input.cbud{text-align:right}
+.icon-btn.sm{width:44px;height:44px;box-shadow:none;color:var(--bad)}
+.total-line{display:flex;justify-content:space-between;font-weight:650;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.warnmsg{color:var(--warn)}
+
 /* ===== Selector de modo ===== */
 .chooser{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:14px;padding:24px var(--gut);max-width:640px;margin:0 auto}
 .chooser .logo{align-self:center;border-radius:20px;box-shadow:var(--shadow)}

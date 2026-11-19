@@ -137,7 +137,7 @@ test('sharedCSV con BOM, comillas escapadas y lugares frecuentes', () => {
   s.entries = [entry(s, { id: 'c1', place: 'Bar "El Sol"', amount: 12.5, payerId: me, note: 'cena' }),
     entry(s, { place: 'Mercadona' }), entry(s, { place: 'Mercadona' })];
   const csv = sharedCSV(s, s.entries);
-  assert.ok(csv.startsWith('﻿fecha,local'));
-  assert.ok(csv.includes('"Bar ""El Sol""","Súper","Priyank",12.50,50,gasto,"cena"'));
+  assert.ok(csv.startsWith('\ufeffFecha;Local;Categoría;Pagado por;Importe (€);Parte de quien pagó (%);Tipo;Nota\r\n'));
+  assert.ok(csv.includes('"Bar ""El Sol""";"Súper";"Priyank";12,50;50;Gasto;"cena"'));
   assert.deepEqual(knownPlaces(s), ['Mercadona', 'Bar "El Sol"']);
 });

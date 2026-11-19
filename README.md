@@ -51,7 +51,13 @@ siempre lo revisas antes de guardar; si no se puede leer, lo rellenas a mano.
 - **Grandes pagos** (seguro, ITV, vacaciones...): eliges repartirlos **en 12 meses, en 6 o solo en el mes del pago**, y si se repiten cada anio. La app te dice cuanto apartar al mes.
 - **Historial** del mes con gastos, ingresos y aportaciones; editar, borrar y deshacer.
 - **Importar tu Excel** (hoja `Gastos`): varios pagos al anio -> media mensual; un pago anual -> gran pago repartido segun tu columna "Prorratear"; "Solo en el anio" -> pago de ese mes.
-- **Copias**: exportar CSV / JSON y restaurar.
+- **Categorías editables**: en Ajustes renombras una categoría (se actualiza en todos sus gastos, grandes pagos y reglas) o la borras eligiendo a cuál se mueven sus gastos (con *Deshacer*). El presupuesto mensual de cada una se guarda al escribir.
+
+## Cambio de móvil y copias
+- **Copia completa** (Ajustes): UN archivo con todo — modo individual, modo compartido (grupo, quién eres tú, movimientos), fotos de tickets y ajustes. En el móvil nuevo: Ajustes -> *Restaurar copia completa*. También restaura las copias antiguas del modo individual.
+- **CSV (Excel)**: tus movimientos (gastos, ingresos, aportaciones, inversiones) con columnas en español (`Fecha;Mes;Tipo;Categoría u objetivo;Concepto;Importe (€)`), separador `;` y coma decimal para que Excel en español lo abra bien. Los gastos, aportaciones e inversiones llevan el importe en negativo. La app también puede **importar ese mismo CSV** (no duplica lo ya existente), pero no lleva presupuestos ni grandes pagos: para eso usa la copia completa.
+- El modo Compartido tiene su propio CSV (`Fecha;Local;Categoría;Pagado por;Importe (€);...`) y su archivo para fusionar con tu pareja.
+- La app avisa si llevas más de 30 días sin copia completa.
 
 ## Como se calcula
 - Presupuesto del mes = media mensual por categoria + parte que toca apartar de cada gran pago.
@@ -80,7 +86,7 @@ Los datos antiguos (v1) se migran solos al abrir la nueva version.
 - La lectura de tickets y de PDF necesita conexión la primera vez (lector ~7 MB + visor de PDF) y es aproximada.
 - Extractos: solo Trade Republic por ahora; un PDF con texto real de Trade Republic no se ha probado (solo uno en imagen).
 - Las categorias del modo compartido son fijas (Super, Comida fuera, Casa, Ocio, Viajes, Otros).
-- Los datos estan atados a UN dispositivo/navegador: si borras los datos del sitio, se pierden. Haz copia JSON de vez en cuando.
+- Los datos estan atados a UN dispositivo/navegador: si borras los datos del sitio, se pierden. Haz una copia completa de vez en cuando.
 - No sincroniza entre movil y PC.
 - Los grandes pagos no son una "hucha" real con saldo: solo reparten el presupuesto mensual.
 - Las aportaciones a objetivos no se restan cuando gastas ese dinero (p. ej. el viaje): son un contador de lo apartado.

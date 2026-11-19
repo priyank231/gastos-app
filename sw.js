@@ -1,8 +1,8 @@
 // Service worker: la app funciona sin conexión. Sube VERSION al cambiar archivos para forzar la actualización.
-const VERSION = 'gastos-v7';
+const VERSION = 'gastos-v8';
 const CDN_CACHE = 'gastos-cdn-1';          // lector de tickets (WASM): se guarda para usarlo sin conexión
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'ui.js', 'photos.js', 'shared.js', 'shared-ui.js',
-  'ocr.js', 'ticket.js', 'statement.js', 'pdfread.js', 'import-ui.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+  'ocr.js', 'ticket.js', 'statement.js', 'pdfread.js', 'import-ui.js', 'backup.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

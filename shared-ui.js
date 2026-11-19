@@ -35,6 +35,9 @@ function save() {
 }
 
 export const hasGroup = () => !!S.groupId && !!S.meId;
+/** Estado compartido para la copia completa / restaurarla en otro móvil. */
+export const getState = () => S;
+export function setState(next) { S = validateShared(next); save(); }
 export const tabLabels = () => ({ mes: 'Saldo', hist: 'Movimientos', ajustes: 'Ajustes' });
 
 // ---------- periodo ----------
@@ -164,7 +167,7 @@ export function afterRender(tab) {
       p.name = $('#aPartner').value.trim().slice(0, 30) || p.name;
       save();
     };
-    $('#aMe').onchange = rename; $('#aPartner').onchange = rename;
+    for (const id of ['aMe', 'aPartner']) { $(`#${id}`).addEventListener('input', rename); $(`#${id}`).addEventListener('change', rename); }
     $('#aImport').onchange = (e) => importFile(e);
     $('#aPasteBtn').onclick = () => importText($('#aPaste').value);
     $('#aAuto').onchange = (e) => setAutoRead(e.target.checked);

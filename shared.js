@@ -158,12 +158,13 @@ export function applyImport(local, exp) {
 /** CSV legible en Excel (BOM UTF-8). Importe en positivo; `parte_pagador_pct` = % que consume quien pago. */
 export function sharedCSV(s, entries) {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = ['fecha,local,categoria,pagado_por,importe,parte_pagador_pct,tipo,nota'];
+  const num = (n) => n.toFixed(2).replace('.', ',');
+  const lines = ['Fecha;Local;Categoría;Pagado por;Importe (€);Parte de quien pagó (%);Tipo;Nota'];
   for (const e of [...entries].sort((a, b) => a.date.localeCompare(b.date))) {
-    lines.push([e.date, q(e.place), q(e.category), q(nameOf(s, e.payerId)), e.amount.toFixed(2),
-      e.payerPct, e.settle ? 'liquidacion' : 'gasto', q(e.note)].join(','));
+    lines.push([e.date, q(e.place), q(e.category), q(nameOf(s, e.payerId)), num(e.amount),
+      e.payerPct, e.settle ? 'Pago entre vosotros' : 'Gasto', q(e.note)].join(';'));
   }
-  return `﻿${lines.join('\n')}`;
+  return `\ufeff${lines.join('\r\n')}\r\n`;
 }
 
 /** Lugares ya usados, mas frecuentes primero (para autocompletar). */
