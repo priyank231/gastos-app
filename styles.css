@@ -77,4 +77,10 @@ input:focus-visible,button:focus-visible{outline:3px solid var(--acc);outline-of
 .thumb{width:40px;height:40px;object-fit:cover;border-radius:8px;margin-right:10px;vertical-align:middle;background:var(--line)}
 .item>span:first-child{display:flex;align-items:center}
 #sPhotoPrev{display:block;max-width:100%;max-height:220px;border-radius:12px;margin-top:10px}
+h2 .info{text-transform:none;letter-spacing:0}
+.info{position:relative;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--mut);background:none;color:var(--mut);font:italic 700 13px/1 Georgia,serif;cursor:pointer;margin-left:6px;padding:0;vertical-align:middle}
+.info::before{content:'';position:absolute;inset:-12px}
+.info[aria-expanded=true]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.infotext{margin:0 0 10px;padding:8px 10px;border-left:3px solid var(--acc);background:var(--bg);border-radius:6px;font-size:13px;color:var(--mut)}
+.chooser .link{align-self:center;margin-top:8px}
 @media (prefers-reduced-motion:no-preference){.bar>i{transition:width .3s}}

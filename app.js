@@ -1,6 +1,6 @@
 import { MONTHS, SPREADS, eur, round2, pad, uid, localISO, defaultData, parseAmount, parsePlan, monthSummary,
   savingsStats, goalTotals, expensesCSV, validateBackup, daysInMonth } from './core.js';
-import { $, esc, dec, banner, toast, deliver } from './ui.js';
+import { $, esc, dec, banner, toast, deliver, h2, APP_VERSION, updateApp } from './ui.js';
 import * as shared from './shared-ui.js';
 
 const KEY = 'gastos.v1';          // misma clave: validateBackup migra los datos antiguos
@@ -59,7 +59,7 @@ function render() {
   for (const sel of ['.top', '.modebar', 'main', '.tabs']) document.querySelector(sel).hidden = choosing;
   if (choosing) { $('#fab').hidden = true; return; }
   const sh = appMode === 'shared';
-  $('#modeName').textContent = sh ? 'Modo compartido' : 'Modo individual';
+  $('#modeName').textContent = `${sh ? 'Modo compartido' : 'Modo individual'} - v${APP_VERSION}`;
   $('#monthTitle').textContent = sh ? shared.title() : `${MONTHS[cur.m - 1]} ${cur.y}`;
   const labels = sh ? shared.tabLabels() : { mes: 'Resumen', hist: 'Historial', ajustes: 'Ajustes' };
   document.querySelectorAll('.tabs button').forEach((b) => {
@@ -170,28 +170,21 @@ function viewAjustes() {
   return `<section class="card set"><h2>Plan mensual</h2>
     <label>Sueldo / ingreso neto mensual (EUR)<input id="sIncome" inputmode="decimal" value="${data.income ? dec(data.income) : ''}"></label>
     <label>Inversion mensual (EUR) - se resta del libre<input id="sInvest" inputmode="decimal" value="${data.investment ? dec(data.investment) : ''}"></label>
-    <h2 style="margin-top:16px">Presupuesto mensual por categoria</h2>${cats || '<p class="small mut">Importa el Excel o anade categorias.</p>'}
+    ${h2('Presupuesto mensual por categoria', 'Lo que quieres gastar al mes en cada categoria. Puedes importarlo del Excel o escribirlo a mano.', 'margin-top:16px')}${cats}
     <div class="row"><input id="sNewCat" placeholder="Nueva categoria" maxlength="40"><button class="btn" id="sAddCat">Anadir</button></div></section>
-  <section class="card set"><h2>Grandes pagos</h2>
-    <p class="small mut">Seguro, ITV, vacaciones... Elige si se reparte en 12 meses, en 6 o solo en el mes del pago.</p>
-    ${pays || '<p class="small mut">Ninguno todavia.</p>'}
+  <section class="card set">${h2('Grandes pagos', 'Seguro, ITV, vacaciones... Elige si se reparte en 12 meses, en 6 o solo en el mes del pago.')}
+    ${pays}
     <div class="row"><button class="btn primary" id="sAddPay">Anadir gran pago</button></div></section>
-  <section class="card set"><h2>Objetivos de ahorro</h2>
-    <p class="small mut">Por ejemplo "Viaje". Las aportaciones se anaden con el boton + (pestana Aportacion).</p>
+  <section class="card set">${h2('Objetivos de ahorro', 'Por ejemplo "Viaje". Las aportaciones se anaden con el boton + (pestana Aportacion).')}
     ${goals}
     <div class="row"><input id="sNewGoal" placeholder="Nuevo objetivo (ej. Viaje)" maxlength="40"><button class="btn" id="sAddGoal">Anadir</button></div></section>
-  <section class="card set"><h2>Ahorro medio</h2>
-    <label>Contar desde (mes) - vacio = automatico<input id="sFrom" type="month" value="${esc(data.savingsFrom)}"></label>
-    <p class="small mut">El promedio usa meses completos; el mes en curso no cuenta.</p></section>
-  <section class="card set"><h2>Importar desde Excel</h2>
-    <p class="small mut">Lee la hoja "Gastos": los pagos de varias veces al año van a la media mensual; los de un solo pago anual pasan a "Grandes pagos"
-    (repartidos segun tu columna "Prorratear"); "Solo en el año" = pago de ese mes. El archivo se procesa en tu dispositivo.
-    Importa solo archivos tuyos. Tus gastos registrados no se tocan.</p>
+  <section class="card set">${h2('Ahorro medio', 'El promedio usa meses completos; el mes en curso no cuenta. Si dejas el campo vacio empieza solo en el primer mes con datos.')}
+    <label>Contar desde (mes)<input id="sFrom" type="month" value="${esc(data.savingsFrom)}"></label></section>
+  <section class="card set">${h2('Importar desde Excel', 'Lee la hoja "Gastos": los pagos de varias veces al año van a la media mensual; los de un solo pago anual pasan a "Grandes pagos" (repartidos segun tu columna "Prorratear"); "Solo en el año" = pago de ese mes. El archivo se procesa en tu dispositivo. Importa solo archivos tuyos. Tus gastos registrados no se tocan.')}
     <input type="file" id="sXlsx" accept=".xlsx,.xlsm"></section>
-  <section class="card set"><h2>Copia de seguridad</h2>
+  <section class="card set">${h2('Copia de seguridad', 'Los datos viven solo en este dispositivo. Haz copia de vez en cuando.')}
     <div class="row"><button class="btn" id="sCsv">Exportar movimientos (CSV)</button><button class="btn" id="sJson">Copia completa (JSON)</button></div>
-    <label>Restaurar copia (JSON)<input type="file" id="sRestore" accept=".json,application/json"></label>
-    <p class="small mut">Los datos viven solo en este dispositivo. Haz copia de vez en cuando.</p></section>
+    <label>Restaurar copia (JSON)<input type="file" id="sRestore" accept=".json,application/json"></label></section>
   <section class="card set"><h2>Zona de riesgo</h2>
     <button class="btn danger" id="sWipe">Borrar todos los datos</button></section>`;
 }
@@ -460,8 +453,13 @@ const shift = (d) => {
 $('#prev').onclick = () => shift(-1);
 $('#next').onclick = () => shift(1);
 
-document.querySelectorAll('[data-appmode]').forEach((b) => { b.onclick = () => { appMode = b.dataset.appmode; tab = 'mes'; render(); }; });
-$('#modeSwitch').onclick = () => { appMode = 'choose'; render(); };
+// Delegado en document: funciona aunque se re-dibuje la pantalla
+document.addEventListener('click', (e) => {
+  const pick = e.target.closest('[data-appmode]');
+  if (pick) { appMode = pick.dataset.appmode; tab = 'mes'; render(); return; }
+  if (e.target.closest('#modeSwitch')) { appMode = 'choose'; render(); return; }
+  if (e.target.closest('#updateApp')) updateApp();
+});
 shared.init({ render });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

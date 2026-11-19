@@ -2,7 +2,7 @@
 import { MONTHS, eur, localISO, parseAmount, uid } from './core.js';
 import { SHARED_CATS, defaultShared, createGroup, partnerOf, nameOf, balance, periodRange, periodEntries, periodStats,
   makeExport, validateExport, applyImport, validateShared, sharedCSV, knownPlaces } from './shared.js';
-import { $, esc, dec, toast, banner, deliver } from './ui.js';
+import { $, esc, dec, toast, banner, deliver, h2 } from './ui.js';
 import { putPhoto, getPhoto, delPhoto, compress, blobToDataURL, dataURLToBlob } from './photos.js';
 
 const KEY = 'gastos.shared.v1';
@@ -57,13 +57,11 @@ const periodLabelFile = () => {
 
 // ---------- vistas ----------
 function setupView() {
-  return `<section class="card set"><h2>Configurar compartido</h2>
-    <p class="small mut">Cada uno guarda su copia en su movil y os pasais un archivo para fusionar. Ninguna nube.</p>
+  return `<section class="card set">${h2('Configurar compartido', 'Cada uno guarda su copia en su movil y os pasais un archivo para fusionar. Ninguna nube. El primero crea el grupo; el otro se une con el archivo que reciba.')}
     <label>Tu nombre<input id="gMe" maxlength="30" placeholder="Ej. Priyank"></label>
     <label>Nombre de tu pareja<input id="gPartner" maxlength="30" placeholder="Ej. Ana"></label>
     <div class="row"><button class="btn primary" id="gCreate">Crear grupo</button></div></section>
-  <section class="card set"><h2>O unirte con su archivo</h2>
-    <p class="small mut">Si tu pareja ya creo el grupo, pidele que exporte (Ajustes o Saldo) y abre aqui el archivo que te mande.</p>
+  <section class="card set">${h2('O unirte con su archivo', 'Si tu pareja ya creo el grupo, pidele que exporte (pestana Saldo) y abre aqui el archivo que te mande. No crees otro grupo: os saldria cada uno por su lado.')}
     <input type="file" id="gJoin" accept=".json,application/json"></section>`;
 }
 
@@ -89,8 +87,7 @@ function saldoView() {
         <div class="kpi"><span>Pagaste tu</span><b>${eur(st.paidMe)}</b></div>
         <div class="kpi"><span>Pago ${esc(partner.name)}</span><b>${eur(st.paidPartner)}</b></div>
       </div><div class="small mut" style="margin-top:8px">${st.count} gasto(s) en el periodo</div></section>
-    <section class="card set"><h2>Exportar ${esc(title())}</h2>
-      <p class="small mut">Para que ella fusione tus gastos, o para guardar el registro con fechas y local.</p>
+    <section class="card set">${h2(`Exportar ${esc(title())}`, 'Enviar para fusionar: archivo que tu pareja abre en su app para recibir tus gastos (con fotos si lo marcas). CSV: registro con fechas y local para Excel.')}
       <label class="check"><input type="checkbox" id="gPhotos" checked> Incluir fotos de tickets</label>
       <div class="row"><button class="btn primary" id="gExpJson">Enviar para fusionar</button><button class="btn" id="gExpCsv">CSV (Excel)</button></div></section>`;
 }
@@ -108,15 +105,12 @@ function listView() {
 
 function ajustesView() {
   const p = partnerOf(S), me = S.members.find((m) => m.id === S.meId);
-  return `<section class="card set"><h2>Nombres</h2>
+  return `<section class="card set">${h2('Nombres', `Codigo del grupo: ${esc(S.groupId.slice(0, 6))} (debe coincidir en los dos moviles).`)}
       <label>Tu nombre<input id="aMe" maxlength="30" value="${esc(me.name)}"></label>
-      <label>Tu pareja<input id="aPartner" maxlength="30" value="${esc(p.name)}"></label>
-      <p class="small mut">Codigo del grupo: ${esc(S.groupId.slice(0, 6))} (debe coincidir en los dos moviles).</p></section>
-    <section class="card set"><h2>Recibir de tu pareja</h2>
-      <p class="small mut">Abre el archivo que te mande. Se fusiona: los movimientos nuevos se anaden, los editados se actualizan y no se duplica nada.</p>
+      <label>Tu pareja<input id="aPartner" maxlength="30" value="${esc(p.name)}"></label></section>
+    <section class="card set">${h2('Recibir de tu pareja', 'Abre el archivo que te mande. Se fusiona: los movimientos nuevos se anaden, los editados se actualizan y no se duplica nada.')}
       <input type="file" id="aImport" accept=".json,application/json"></section>
-    <section class="card set"><h2>Zona de riesgo</h2>
-      <p class="small mut">Borra los gastos compartidos de ESTE movil (no los de tu pareja). Exporta antes si quieres conservarlos.</p>
+    <section class="card set">${h2('Zona de riesgo', 'Borra los gastos compartidos de ESTE movil (no los de tu pareja). Exporta antes si quieres conservarlos.')}
       <button class="btn danger" id="aLeave">Salir del grupo y borrar</button></section>`;
 }
 
