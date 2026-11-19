@@ -86,6 +86,7 @@ npm test                     # logica pura (core.js) con node --test
 python -m http.server 8099   # y abre http://127.0.0.1:8099
 ```
 Estructura: `core.js`, `shared.js`, `ticket.js` y `statement.js` (lógica, probadas) · `app.js` (individual) · `shared-ui.js` (compartido) · `ui.js` · `ocr.js` (lector de tickets) · `pdfread.js` (PDF/OCR) · `import-ui.js` (extractos) · `exportxl.js` (Excel por periodo) · `backup.js` (copia completa) · `photos.js` (IndexedDB) · `sw.js` (offline, red primero) · `styles.css` · `index.html`.
+Para continuar desde otro PC ver `CONTINUAR.md`.
 Los datos antiguos (v1) se migran solos al abrir la nueva version.
 
 ## Limitaciones
