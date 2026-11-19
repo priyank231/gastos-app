@@ -20,7 +20,7 @@
 <div id="banner" class="banner" hidden></div>
 <main id="view"></main>
 
-<button class="fab" id="fab" aria-label="Anadir gasto">+</button>
+<button class="fab" id="fab" aria-label="Anadir">+</button>
 
 <nav class="tabs" aria-label="Secciones">
   <button data-tab="mes" aria-current="page">Resumen</button>
@@ -28,17 +28,23 @@
   <button data-tab="ajustes">Ajustes</button>
 </nav>
 
+<!-- Gasto / ingreso extra / aportacion a un objetivo -->
 <dialog id="dlg">
-  <form id="form" method="dialog" autocomplete="off">
+  <form id="form" autocomplete="off">
+    <div class="seg" id="modes" role="tablist" aria-label="Que quieres anadir">
+      <button type="button" role="tab" data-mode="expense">Gasto</button>
+      <button type="button" role="tab" data-mode="income">Ingreso extra</button>
+      <button type="button" role="tab" data-mode="goal">Aportacion</button>
+    </div>
     <h2 id="dlgTitle">Nuevo gasto</h2>
     <label>Importe (EUR)
       <input id="fAmount" inputmode="decimal" placeholder="0,00" required>
     </label>
-    <fieldset>
-      <legend>Categoria</legend>
+    <fieldset id="fCatsWrap">
+      <legend id="fCatsLegend">Categoria</legend>
       <div id="fCats" class="chips" role="radiogroup"></div>
     </fieldset>
-    <label>Concepto (opcional)
+    <label id="fConceptLabel">Concepto (opcional)
       <input id="fConcept" maxlength="80" placeholder="Ej. supermercado">
     </label>
     <label>Fecha
@@ -49,6 +55,37 @@
       <button type="button" class="btn ghost" id="fCancel">Cancelar</button>
       <button type="button" class="btn danger" id="fDelete" hidden>Borrar</button>
       <button type="submit" class="btn primary" id="fSave">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Gran pago planificado -->
+<dialog id="dlgPay">
+  <form id="payForm" autocomplete="off">
+    <h2 id="payTitle">Gran pago</h2>
+    <label>Que es
+      <input id="pName" maxlength="60" placeholder="Ej. seguro del coche" required>
+    </label>
+    <label>Importe total (EUR)
+      <input id="pAmount" inputmode="decimal" placeholder="0,00" required>
+    </label>
+    <fieldset><legend>Categoria</legend><div id="pCats" class="chips" role="radiogroup"></div></fieldset>
+    <div class="grid2">
+      <label>Mes del pago
+        <select id="pMonth"></select>
+      </label>
+      <label>Año
+        <input id="pYear" type="number" min="2020" max="2100" required>
+      </label>
+    </div>
+    <fieldset><legend>Como lo repartes</legend><div id="pSpreads" class="chips" role="radiogroup"></div></fieldset>
+    <label class="check"><input type="checkbox" id="pRepeat"> Se repite cada año</label>
+    <p id="pPreview" class="small mut"></p>
+    <p id="pError" class="error" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="btn ghost" id="pCancel">Cancelar</button>
+      <button type="button" class="btn danger" id="pDelete" hidden>Borrar</button>
+      <button type="submit" class="btn primary">Guardar</button>
     </div>
   </form>
 </dialog>

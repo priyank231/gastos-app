@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin conexion. Sube VERSION al cambiar archivos para forzar la actualizacion.
-const VERSION = 'gastos-v2';
+const VERSION = 'gastos-v3';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
