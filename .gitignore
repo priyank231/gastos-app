@@ -1,0 +1,7 @@
+node_modules/
+*.xlsx
+*.xlsm
+*.json.bak
+gastos-copia-*.json
+_seed.html
+_flow.html
