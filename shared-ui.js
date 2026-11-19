@@ -59,7 +59,7 @@ const periodLabelFile = () => {
 function setupView() {
   return `<section class="card set">${h2('Configurar compartido', 'Cada uno guarda su copia en su movil y os pasais un archivo para fusionar. Ninguna nube. El primero crea el grupo; el otro se une con el archivo que reciba.')}
     <label>Tu nombre<input id="gMe" maxlength="30" placeholder="Ej. Priyank"></label>
-    <label>Nombre de tu pareja<input id="gPartner" maxlength="30" placeholder="Ej. Ana"></label>
+    <label>Nombre de tu pareja<input id="gPartner" maxlength="30" placeholder="Ej. Bea"></label>
     <div class="row"><button class="btn primary" id="gCreate">Crear grupo</button></div></section>
   <section class="card set">${h2('O unirte con su archivo', 'Si tu pareja ya creo el grupo, pidele que exporte (pestana Saldo) y abre aqui el archivo que te mande. No crees otro grupo: os saldria cada uno por su lado.')}
     <input type="file" id="gJoin" accept=".json,application/json"></section>`;
