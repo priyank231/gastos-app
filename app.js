@@ -3,6 +3,7 @@ import { MONTHS, SPREADS, eur, round2, pad, uid, localISO, defaultData, parseAmo
 import { $, esc, dec, banner, toast, deliver, h2, icon, avatar, APP_VERSION, updateApp, autoReadOn, setAutoRead,
   setScanStatus, scanTicket, describeScan } from './ui.js';
 import * as shared from './shared-ui.js';
+import * as imp from './import-ui.js';
 
 const KEY = 'gastos.v1';          // misma clave: validateBackup migra los datos antiguos
 const DEFAULT_CATS = ['Vivienda', 'Suministros', 'Transporte', 'Alimentación', 'Seguros e impuestos',
@@ -76,7 +77,7 @@ function render() {
 }
 
 function savingsCard(s) {
-  const st = savingsStats(data);
+  const st = savingsStats(data, localISO(), (y, m) => (data.includeShared ? shared.myMonthShare(y, m) : 0));
   let avg;
   if (st.ready) {
     avg = `<div class="big" style="font-size:26px">${eur(st.avg)}</div><div class="small mut">al mes, media de ${st.count} ${st.count === 1 ? 'mes completo' : 'meses completos'}</div>`;
@@ -90,6 +91,7 @@ function savingsCard(s) {
     <div class="kpis" style="margin-top:0">
       <div class="kpi"><span>Este mes (hasta hoy)</span><b>${data.income || s.extra ? eur(s.saved) : '-'}</b></div>
       <div class="kpi"><span>Ingresos del mes</span><b>${data.income || s.extra ? eur(s.income) : '-'}</b></div>
+      ${s.invested ? `<div class="kpi"><span>Invertido este mes</span><b>${eur(s.invested)}</b></div>` : ''}
     </div>
     ${s.extra ? `<div class="small mut" style="margin-top:6px">incluye ${eur(s.extra)} de ingresos extra</div>` : ''}
     <h2 style="margin-top:18px">Promedio mensual</h2>${avg}${last ? `<div style="margin-top:10px">${last}</div>` : ''}</section>`;
@@ -107,7 +109,8 @@ function goalsCard() {
 }
 
 function viewMes() {
-  const s = monthSummary(data, cur.y, cur.m);
+  const shareNow = data.includeShared ? shared.myMonthShare(cur.y, cur.m) : 0;
+  const s = monthSummary(data, cur.y, cur.m, localISO(), { extra: shareNow > 0 ? [{ name: 'Compartido (mi parte)', amount: shareNow }] : [] });
   const isCur = inCurrentMonth();
   const dim = daysInMonth(cur.y, cur.m);
   let state = '', cls = 'ok';
@@ -125,10 +128,10 @@ function viewMes() {
   const rows = s.rows.map((r) => {
     const p = r.budget > 0 ? Math.min(100, (r.spent / r.budget) * 100) : (r.spent > 0 ? 100 : 0);
     const bc = r.over ? 'bad' : r.pct >= 0.85 ? 'warn' : '';
-    const note = r.over ? `<span class="state bad">▲ superado en ${eur(r.spent - r.budget)}</span>`
+    const note = r.extra ? '<span class="mut small">tu parte de los gastos compartidos</span>' : r.over ? `<span class="state bad">▲ superado en ${eur(r.spent - r.budget)}</span>`
       : `<span class="mut small">queda ${eur(r.remaining)}</span>`;
-    return `<div class="cat"><div class="row1">${avatar(r.name)}<div class="meta"><div class="head"><span>${esc(r.name)}</span><span class="num">${eur(r.spent)} <span class="mut">/ ${eur(r.budget)}</span></span></div>
-      <div class="bar ${bc}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p)}" aria-label="${esc(r.name)}"><i style="width:${p}%"></i></div>${note}</div></div></div>`;
+    return `<div class="cat"><div class="row1">${avatar(r.name)}<div class="meta"><div class="head"><span>${esc(r.name)}</span><span class="num">${eur(r.spent)}${r.extra ? '' : ` <span class="mut">/ ${eur(r.budget)}</span>`}</span></div>
+      ${r.extra ? '' : `<div class="bar ${bc}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p)}" aria-label="${esc(r.name)}"><i style="width:${p}%"></i></div>`}${note}</div></div></div>`;
   }).join('');
   return `${onboarding}
   <section class="card"><div class="hero">
@@ -154,9 +157,11 @@ function viewHist() {
     ...data.expenses.map((e) => ({ type: 'expense', tag: 'Gasto', id: e.id, date: e.date, title: e.concept || e.category, sub: e.category, amount: `-${eur(e.amount)}` })),
     ...data.incomes.map((i) => ({ type: 'income', tag: 'Ingreso', id: i.id, date: i.date, title: i.concept || 'Ingreso extra', sub: 'Ingreso extra', amount: `+${eur(i.amount)}` })),
     ...data.contributions.map((c) => ({ type: 'goal', tag: 'Aportación', id: c.id, date: c.date, title: goalName.get(c.goalId) || 'Objetivo', sub: c.concept || 'Aportación', amount: eur(c.amount) })),
+    ...data.investments.map((i) => ({ type: 'invest', tag: 'Inversión', id: i.id, date: i.date, title: i.concept || 'Inversión', sub: 'Inversión', amount: eur(i.amount) })),
   ].filter((x) => x.date.startsWith(prefix)).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  if (!list.length) return `<div class="empty">${icon('receipt')}<br>Sin movimientos este mes.<br>Pulsa + para añadir el primero.</div>`;
-  let html = '', day = '';
+  const importBtn = `<button class="btn soft" data-act="import" style="width:100%;margin:8px 0 2px">${icon('file')}Importar extracto del banco (PDF)</button>`;
+  if (!list.length) return `${importBtn}<div class="empty">${icon('receipt')}<br>Sin movimientos este mes.<br>Pulsa + para añadir el primero.</div>`;
+  let html = importBtn, day = '';
   for (const e of list) {
     if (e.date !== day) {
       day = e.date;
@@ -186,6 +191,10 @@ function viewAjustes() {
     <div class="row"><input id="sNewGoal" placeholder="Nuevo objetivo (ej. Viaje)" maxlength="40"><button class="btn" id="sAddGoal">Añadir</button></div></section>
   <section class="card set">${h2('Ahorro medio', 'El promedio usa meses completos; el mes en curso no cuenta. Si dejas el campo vacío empieza solo en el primer mes con datos.')}
     <label>Contar desde (mes)<input id="sFrom" type="month" value="${esc(data.savingsFrom)}"></label></section>
+  <section class="card set">${h2('Importar extracto del banco', 'Sube el PDF del extracto (por ahora, Trade Republic). La app lo lee en tu móvil, clasifica cada movimiento y tú revisas y corriges antes de importar. Recuerda tus cambios para la próxima vez y no duplica lo ya importado. Si el PDF es una imagen, usa lectura OCR (más lenta).')}
+    <button class="btn primary" data-act="import" style="width:100%">${icon('file')}Importar extracto (PDF)</button></section>
+  <section class="card set">${h2('Neto con tu pareja', 'Cuando pagas tú un gasto compartido, solo cuenta tu parte en tus gastos (el resto se lo debe tu pareja). Sus pagos por Bizum o transferencia no son ingresos: bajan lo que te debe en el modo Compartido.')}
+    <label class="check"><input type="checkbox" id="sIncShared" ${data.includeShared ? 'checked' : ''}> Incluir mi parte de los gastos compartidos en mis gastos</label></section>
   <section class="card set">${h2('Lectura de tickets', 'Al añadir una foto de un ticket, la app intenta leer importe, fecha y local y rellena el formulario para que lo revises. La foto se lee en tu móvil y no se envía a ningún sitio. La primera vez descarga el lector (unos 7 MB) y necesita conexión. Es una ayuda: a veces se equivoca.')}
     <label class="check"><input type="checkbox" id="sAuto" ${autoReadOn() ? 'checked' : ''}> Leer automáticamente al añadir la foto (modo compartido)</label></section>
   <section class="card set">${h2('Importar desde Excel', 'Lee la hoja "Gastos": los pagos de varias veces al año van a la media mensual; los de un solo pago anual pasan a "Grandes pagos" (repartidos según tu columna "Prorratear"); "Solo en el año" = pago de ese mes. El archivo se procesa en tu dispositivo. Importa solo archivos tuyos. Tus gastos registrados no se tocan.')}
@@ -204,6 +213,7 @@ function bindAjustes() {
   $('#sInvest').onchange = (e) => { const n = num(e.target); if (n === null) return toast('Importe no válido'); data.investment = n; save(); };
   $('#sFrom').onchange = (e) => { data.savingsFrom = e.target.value; save(); };
   $('#sAuto').onchange = (e) => setAutoRead(e.target.checked);
+  $('#sIncShared').onchange = (e) => { data.includeShared = e.target.checked; save(); };
   document.querySelectorAll('[data-cat]').forEach((el) => {
     el.onchange = () => { const n = num(el); if (n === null) return toast('Importe no válido'); data.categories[Number(el.dataset.cat)].budget = n; save(); };
   });
@@ -489,9 +499,22 @@ $('#pDelete').onclick = () => {
 // ---------- navegación ----------
 $('#fab').onclick = () => (appMode === 'shared' ? shared.openAdd() : openForm('expense'));
 $('#view').addEventListener('click', (e) => {
+  if (e.target.closest('[data-act=import]')) { $('#impFile').click(); return; }
   const it = e.target.closest('.item[data-type]');
-  if (it) openForm(it.dataset.type, it.dataset.id);
+  if (!it) return;
+  if (it.dataset.type === 'invest') {
+    const i = data.investments.findIndex((x) => x.id === it.dataset.id);
+    if (i >= 0 && confirm('¿Borrar esta inversión?')) {
+      const [gone] = data.investments.splice(i, 1);
+      save(); render();
+      toast('Inversión borrada', 'Deshacer', () => { data.investments.push(gone); save(); render(); });
+    }
+    return;
+  }
+  openForm(it.dataset.type, it.dataset.id);
 });
+imp.init({ getData: () => data, save, render, catNames, shared });
+$('#impFile').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) imp.startImport(f); };
 document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; render(); }; });
 const shift = (d) => {
   if (appMode === 'shared') { shared.shift(d); render(); return; }

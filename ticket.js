@@ -1,7 +1,7 @@
 // Interpreta el TEXTO que el OCR saca de un ticket: importe, fecha, local y categoria probable.
 // Es heuristico: el OCR falla y los tickets son muy distintos. Siempre se devuelve algo revisable, nunca se guarda solo.
 
-const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+export const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const MONEY = /(\d{1,3}(?:[.\s]\d{3})+|\d+)\s?[,.]\s?(\d{2})(?!\d)/g;
 
 const TOTAL_RE = /\btotal\b|a\s*pagar|importe\s*(?:total|factura)?|\bsuma\b|\bpvp\b/;

@@ -16,7 +16,8 @@ export function localISO(d = new Date()) {
 
 export function defaultData() {
   return { version: 2, income: 0, investment: 0, savingsFrom: '', categories: [], payments: [],
-    expenses: [], incomes: [], goals: [], contributions: [] };
+    expenses: [], incomes: [], goals: [], contributions: [],
+    investments: [], imported: [], rules: [], includeShared: true };
 }
 
 /** Acepta "12,5" o "12.50"; devuelve un numero > 0 y <= 100000, o null. */
@@ -81,7 +82,7 @@ export const monthExtraIncome = (data, y, m) => round2(sum(data.incomes.filter((
 export const monthIncome = (data, y, m) => round2(data.income + monthExtraIncome(data, y, m));
 
 /** Resumen de un mes (m = 1..12) frente al plan. `todayISO` permite probar con fechas fijas. */
-export function monthSummary(data, y, m, todayISO = localISO()) {
+export function monthSummary(data, y, m, todayISO = localISO(), opts = {}) {
   const budgets = new Map(data.categories.map((c) => [c.name, c.budget]));
   for (const p of data.payments) {
     const share = paymentShare(p, y, m);
@@ -94,12 +95,21 @@ export function monthSummary(data, y, m, todayISO = localISO()) {
     spent.set(e.category, (spent.get(e.category) || 0) + e.amount);
     spentTotal += e.amount;
   }
+  // gastos que no están en `expenses` pero cuentan como gasto (p. ej. "mi parte" de los gastos compartidos)
+  const extraNames = new Set();
+  for (const x of opts.extra || []) {
+    if (!(x.amount > 0)) continue;
+    spent.set(x.name, (spent.get(x.name) || 0) + x.amount);
+    spentTotal += x.amount;
+    extraNames.add(x.name);
+  }
   const names = new Set([...budgets.keys(), ...spent.keys()]);
   const rows = [...names].map((name) => {
     const budget = round2(budgets.get(name) || 0);
     const s = round2(spent.get(name) || 0);
-    return { name, budget, spent: s, remaining: round2(budget - s),
-      pct: budget > 0 ? s / budget : (s > 0 ? Infinity : 0), over: s > budget };
+    const extra = extraNames.has(name) && budget === 0;
+    return { name, budget, spent: s, remaining: round2(budget - s), extra,
+      pct: budget > 0 ? s / budget : (s > 0 && !extra ? Infinity : 0), over: !extra && s > budget };
   }).sort((a, b) => (b.spent - a.spent) || a.name.localeCompare(b.name));
   const budget = round2([...budgets.values()].reduce((a, b) => a + b, 0));
   const remaining = round2(budget - spentTotal);
@@ -114,7 +124,8 @@ export function monthSummary(data, y, m, todayISO = localISO()) {
     budget, spent: round2(spentTotal), remaining, rows, daysLeft,
     daily: daysLeft > 0 && remaining > 0 ? round2(remaining / daysLeft) : 0,
     income, extra,
-    saved: round2(income - spentTotal),              // ahorro del mes = ingresos - gastos reales
+    invested: round2(sum(data.investments.filter((i) => inMonth(i, y, m)))),   // dinero que has movido a inversión
+    saved: round2(income - spentTotal),              // ahorro del mes = ingresos - gastos reales (invertir NO es gastar)
     contributed: round2(sum(data.contributions.filter((c) => inMonth(c, y, m)))),
     free: round2(income - budget - data.investment),
     pct: budget > 0 ? spentTotal / budget : 0,
@@ -126,7 +137,7 @@ export function monthSummary(data, y, m, todayISO = localISO()) {
  * Empieza en `data.savingsFrom` (YYYY-MM) o, si no hay, en el primer mes con registros
  * (se salta ese mes si el primer registro es posterior al dia 5: seria un mes a medias).
  */
-export function savingsStats(data, todayISO = localISO()) {
+export function savingsStats(data, todayISO = localISO(), extraFn = () => 0) {
   if (!(data.income > 0)) return { ready: false, reason: 'income', months: [], count: 0, avg: 0, total: 0 };
   const dates = [...data.expenses, ...data.incomes, ...data.contributions].map((x) => x.date).sort();
   if (!dates.length && !data.savingsFrom) return { ready: false, reason: 'data', months: [], count: 0, avg: 0, total: 0 };
@@ -143,7 +154,7 @@ export function savingsStats(data, todayISO = localISO()) {
   const months = [];
   let [y, m] = start.split('-').map(Number);
   while (`${y}-${pad(m)}` < cur && months.length < 600) {
-    const s = round2(monthIncome(data, y, m) - sum(data.expenses.filter((e) => inMonth(e, y, m))));
+    const s = round2(monthIncome(data, y, m) - sum(data.expenses.filter((e) => inMonth(e, y, m))) - (extraFn(y, m) || 0));
     months.push({ y, m, saved: s });
     m++; if (m > 12) { m = 1; y++; }
   }
@@ -167,6 +178,7 @@ export function expensesCSV(data) {
     ...data.expenses.map((e) => ({ date: e.date, tipo: 'gasto', amount: -e.amount, cat: e.category, concept: e.concept })),
     ...data.incomes.map((i) => ({ date: i.date, tipo: 'ingreso extra', amount: i.amount, cat: '', concept: i.concept })),
     ...data.contributions.map((c) => ({ date: c.date, tipo: 'aportacion', amount: -c.amount, cat: goalName.get(c.goalId) || '', concept: c.concept || '' })),
+    ...(data.investments || []).map((i) => ({ date: i.date, tipo: 'inversion', amount: -i.amount, cat: '', concept: i.concept || '' })),
   ].sort((a, b) => a.date.localeCompare(b.date));
   return ['fecha,tipo,importe,categoria_u_objetivo,concepto',
     ...rows.map((r) => [r.date, r.tipo, r.amount.toFixed(2), q(r.cat), q(r.concept)].join(','))].join('\n');
@@ -198,6 +210,13 @@ export function validateBackup(obj) {
     .map((i) => ({ id: String(i.id || uid()), date: i.date, amount: round2(Number(i.amount)), concept: String(i.concept || '').slice(0, 80) }));
   d.goals = (obj.goals || []).filter((g) => g && typeof g.name === 'string' && g.id)
     .map((g) => ({ id: String(g.id), name: g.name.slice(0, 40), target: Math.max(0, round2(Number(g.target) || 0)) }));
+  d.investments = (obj.investments || []).filter((i) => i && isDate(i.date) && Number(i.amount) !== 0 && Number.isFinite(Number(i.amount)))
+    .map((i) => ({ id: String(i.id || uid()), date: i.date, amount: round2(Number(i.amount)), concept: String(i.concept || '').slice(0, 80) }));
+  d.imported = (Array.isArray(obj.imported) ? obj.imported : []).filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(-5000);
+  const KINDS = ['expense', 'shared', 'partner', 'income', 'invest', 'ignore'];
+  d.rules = (Array.isArray(obj.rules) ? obj.rules : []).filter((r) => r && typeof r.key === 'string' && KINDS.includes(r.kind))
+    .map((r) => ({ key: r.key.slice(0, 40), kind: r.kind, category: String(r.category || '').slice(0, 40) })).slice(-500);
+  d.includeShared = obj.includeShared !== false;
   const goalIds = new Set(d.goals.map((g) => g.id));
   d.contributions = (obj.contributions || []).filter((c) => c && isDate(c.date) && Number(c.amount) > 0 && goalIds.has(String(c.goalId)))
     .map((c) => ({ id: String(c.id || uid()), goalId: String(c.goalId), date: c.date, amount: round2(Number(c.amount)),

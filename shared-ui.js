@@ -379,3 +379,39 @@ $('#sDelete').onclick = () => {
   save(); dlg.close(); rerender();
   toast('Borrado', 'Deshacer', () => { Object.assign(e, before, { deleted: false, updated: Date.now() }); save(); rerender(); });
 };
+
+// ---------- integración con el modo Individual y con el importador de extractos ----------
+export const partnerName = () => (hasGroup() ? partnerOf(S).name : '');
+
+/** Lo que me ha costado de verdad este mes de los gastos compartidos (mi parte, sin liquidaciones). */
+export function myMonthShare(y, m) {
+  if (!hasGroup()) return 0;
+  const mm = String(m).padStart(2, '0');
+  const last = String(new Date(y, m, 0).getDate()).padStart(2, '0');
+  return periodStats(S, { from: `${y}-${mm}-01`, to: `${y}-${mm}-${last}` }).myShare;
+}
+
+/** Movimientos compartidos ya registrados (para no duplicar al importar). */
+export const sharedExisting = () => (hasGroup() ? S.entries.filter((e) => !e.deleted).map((e) => ({ date: e.date, amount: e.amount })) : []);
+
+/**
+ * Crea movimientos compartidos desde un extracto.
+ * items: { kind: 'shared' | 'partner', date, amount (positivo), place, category, direction: 'in' | 'out' }
+ *  - shared: pagué yo, a medias.
+ *  - partner: pago entre vosotros (in = me lo hace mi pareja a mí; out = se lo hago yo a ella).
+ */
+export function addImported(items) {
+  if (!hasGroup()) return 0;
+  const now = Date.now();
+  for (const it of items) {
+    const base = { id: uid(), date: it.date, amount: it.amount, note: 'Importado del extracto', photoId: '', updated: now, deleted: false };
+    if (it.kind === 'shared') {
+      S.entries.push({ ...base, place: String(it.place || '').slice(0, 60), category: SHARED_CATS.includes(it.category) ? it.category : 'Otros',
+        payerId: S.meId, payerPct: 50, settle: false });
+    } else {
+      S.entries.push({ ...base, place: '', category: 'Liquidación', payerId: it.direction === 'in' ? partnerOf(S).id : S.meId, payerPct: 0, settle: true });
+    }
+  }
+  save();
+  return items.length;
+}

@@ -134,3 +134,46 @@ test('validateBackup: filtra basura, valida y migra datos v1', () => {
 });
 
 test('daysInMonth bisiesto', () => assert.equal(daysInMonth(2028, 2), 29));
+
+test('mi parte de lo compartido cuenta como gasto (neto) y no dispara el aviso de presupuesto superado', () => {
+  const d = defaultData();
+  d.income = 2000;
+  d.categories = [{ name: 'Ocio', budget: 100 }];
+  d.expenses = [{ id: 'a', date: '2026-10-05', amount: 40, category: 'Ocio', concept: '' }];
+  const s = monthSummary(d, 2026, 10, '2026-10-20', { extra: [{ name: 'Compartido (mi parte)', amount: 30 }] });
+  assert.equal(s.spent, 70);                                          // 40 propios + 30 de mi parte
+  assert.equal(s.saved, 1930);
+  const row = s.rows.find((r) => r.name === 'Compartido (mi parte)');
+  assert.deepEqual([row.extra, row.over, row.budget], [true, false, 0]);
+  assert.equal(s.budget, 100);                                        // el extra no suma presupuesto
+});
+
+test('invertir no es gastar: se muestra aparte y no resta del ahorro', () => {
+  const d = defaultData();
+  d.income = 2000;
+  d.expenses = [{ id: 'a', date: '2026-10-05', amount: 500, category: 'Ocio', concept: '' }];
+  d.investments = [{ id: 'i', date: '2026-10-06', amount: 400, concept: 'ETF' }, { id: 'j', date: '2026-09-06', amount: 50, concept: 'otro mes' }];
+  const s = monthSummary(d, 2026, 10, '2026-10-20');
+  assert.equal(s.invested, 400);
+  assert.equal(s.saved, 1500);
+});
+
+test('ahorro medio con la parte compartida de cada mes', () => {
+  const d = defaultData();
+  d.income = 2000;
+  d.expenses = [{ id: '1', date: '2026-08-02', amount: 1000, category: 'x', concept: '' }, { id: '2', date: '2026-09-02', amount: 1000, category: 'x', concept: '' }];
+  const s = savingsStats(d, '2026-10-15', (y, m) => (m === 8 ? 100 : 0));
+  assert.deepEqual(s.months.map((x) => x.saved), [900, 1000]);
+});
+
+test('copias: inversiones, huellas y reglas se validan; datos antiguos reciben valores por defecto', () => {
+  const old = validateBackup({ categories: [], expenses: [] });
+  assert.deepEqual([old.investments, old.imported, old.rules, old.includeShared], [[], [], [], true]);
+  const d = validateBackup({ categories: [], expenses: [], includeShared: false,
+    investments: [{ date: '2026-10-01', amount: 40, concept: 'x' }, { date: 'mal', amount: 5 }],
+    imported: ['a|1|b', 7], rules: [{ key: 'revolut', kind: 'invest' }, { key: 'x', kind: 'raro' }, { kind: 'expense' }] });
+  assert.equal(d.investments.length, 1);
+  assert.deepEqual(d.imported, ['a|1|b']);
+  assert.deepEqual(d.rules, [{ key: 'revolut', kind: 'invest', category: '' }]);
+  assert.equal(d.includeShared, false);
+});

@@ -4,7 +4,7 @@ import { eur } from './core.js';
 export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const dec = (n) => String(n).replace('.', ',');
-export const APP_VERSION = '6';
+export const APP_VERSION = '7';
 export const icon = (name, cls = '') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 /** Círculo de color con la inicial (color estable según el nombre). */

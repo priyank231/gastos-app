@@ -68,6 +68,26 @@ const STATUS = {
   'initialized api': 'Preparando el lector…',
 };
 
+/** Abre un lector OCR (español). Quien lo abre debe llamar a worker.terminate(). */
+export async function openWorker(onStatus = () => {}) {
+  const T = await loadLib();
+  return T.createWorker('spa', 1, {
+    workerPath: `${TESS}/worker.min.js`, corePath: CORE, langPath: LANG,
+    logger: (m) => {
+      if (m.status === 'recognizing text') onStatus('Leyendo…', Math.round((m.progress || 0) * 100));
+      else if (STATUS[m.status]) onStatus(STATUS[m.status], null);
+    },
+  });
+}
+
+/** OCR con cajas: devuelve las palabras con su posición (para reconstruir tablas). psm 11 = texto disperso. */
+export async function ocrWords(worker, canvas, psm = '11') {
+  await worker.setParameters({ tessedit_pageseg_mode: String(psm) });
+  const { data } = await worker.recognize(canvas);
+  return (data.words || []).filter((w) => w.text && w.text.trim())
+    .map((w) => ({ text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1, conf: w.confidence }));
+}
+
 /**
  * Lee un ticket y devuelve { text, parsed }. `onStatus(texto, porcentaje|null)` informa del progreso.
  * El worker se destruye al terminar para no ocupar memoria del móvil.
@@ -76,14 +96,7 @@ export async function readTicket(file, { categories = [], onStatus = () => {} } 
   onStatus('Preparando la foto…', null);
   const canvas = await toOcrCanvas(file);
   onStatus('Descargando el lector (solo la primera vez)…', null);
-  const T = await loadLib();
-  const worker = await T.createWorker('spa', 1, {
-    workerPath: `${TESS}/worker.min.js`, corePath: CORE, langPath: LANG,
-    logger: (m) => {
-      if (m.status === 'recognizing text') onStatus('Leyendo el ticket…', Math.round((m.progress || 0) * 100));
-      else if (STATUS[m.status]) onStatus(STATUS[m.status], null);
-    },
-  });
+  const worker = await openWorker((txt, pct) => onStatus(pct == null ? txt : 'Leyendo el ticket…', pct));
   try {
     const { data } = await worker.recognize(canvas);
     return { text: data.text || '', parsed: parseTicket(data.text || '', { categories }) };

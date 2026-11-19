@@ -126,6 +126,23 @@ dialog.sheet[open]{animation:sheet .22s ease-out}
 dialog h2{font-size:20px;font-weight:750;letter-spacing:-.01em;margin:6px 0 4px}
 @keyframes sheet{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
 
+/* ===== Importar extracto ===== */
+dialog.sheet.tall{height:96vh;height:96dvh}
+.imp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.imp-sum{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+.pill.strong{background:var(--acc-soft);color:var(--acc)}
+.mv{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0;background:var(--bg)}
+.mv.review{border-color:var(--warn)}
+.mv.off{opacity:.55}
+.mv-top{display:flex;align-items:baseline;gap:10px}
+.mv-date{font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;flex:none;min-width:46px}
+.mv-desc{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv-amt{white-space:nowrap}.mv-amt.pos{color:var(--ok)}
+.mv-ctl{display:flex;gap:8px;margin-top:8px}
+.mv-ctl select{min-height:44px;font-size:14px;padding:6px 10px}
+.mv-ctl select.kind{flex:1.1}.mv-ctl select.cat{flex:1}
+.mv-note{font-size:12.5px;color:var(--mut);margin-top:6px}.mv-note.warn{color:var(--warn)}
+
 /* ===== Selector de modo ===== */
 .chooser{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:14px;padding:24px var(--gut);max-width:640px;margin:0 auto}
 .chooser .logo{align-self:center;border-radius:20px;box-shadow:var(--shadow)}
