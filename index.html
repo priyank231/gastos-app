@@ -12,11 +12,17 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="chooser" class="chooser" hidden>
+  <h1>Que quieres usar?</h1>
+  <button class="mode-btn" data-appmode="ind">Individual<small>Tus gastos, privados, solo en tu movil</small></button>
+  <button class="mode-btn" data-appmode="shared">Compartido<small>Con tu pareja: reparto, saldo y fotos de tickets</small></button>
+</div>
 <header class="top">
   <button class="icon-btn" id="prev" aria-label="Mes anterior">&#8249;</button>
   <h1 id="monthTitle">Mes</h1>
   <button class="icon-btn" id="next" aria-label="Mes siguiente">&#8250;</button>
 </header>
+<div class="modebar"><span id="modeName"></span><button class="link" id="modeSwitch">Cambiar</button></div>
 <div id="banner" class="banner" hidden></div>
 <main id="view"></main>
 
@@ -85,6 +91,44 @@
     <div class="row">
       <button type="button" class="btn ghost" id="pCancel">Cancelar</button>
       <button type="button" class="btn danger" id="pDelete" hidden>Borrar</button>
+      <button type="submit" class="btn primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Gasto compartido / pago entre vosotros -->
+<dialog id="dlgS">
+  <form id="sForm" autocomplete="off">
+    <h2 id="sTitle">Nuevo gasto compartido</h2>
+    <label>Importe (EUR)
+      <input id="sAmount" inputmode="decimal" placeholder="0,00" required>
+    </label>
+    <label id="sPlaceLabel">Lugar / local
+      <input id="sPlace" list="sPlaces" maxlength="60" placeholder="Ej. Mercadona">
+      <datalist id="sPlaces"></datalist>
+    </label>
+    <fieldset id="sCatWrap"><legend>Categoria</legend><div id="sCats" class="chips"></div></fieldset>
+    <fieldset><legend id="sPayerLegend">Quien pago</legend><div id="sPayer" class="chips"></div></fieldset>
+    <fieldset id="sSplitWrap"><legend>Reparto</legend><div id="sSplit" class="chips"></div>
+      <label id="sPctLabel" hidden>Parte de quien paga (%)<input id="sPct" type="number" min="0" max="100" step="1" inputmode="numeric"></label>
+    </fieldset>
+    <label>Fecha
+      <input id="sDate" type="date" required>
+    </label>
+    <label id="sNoteLabel">Nota (opcional)
+      <input id="sNote" maxlength="120">
+    </label>
+    <fieldset id="sPhotoWrap"><legend>Foto del ticket</legend>
+      <input id="sFileCam" type="file" accept="image/*" capture="environment" hidden>
+      <input id="sFilePick" type="file" accept="image/*" hidden>
+      <div class="row"><button type="button" class="btn" id="sShot">Hacer foto</button><button type="button" class="btn" id="sPick">Galeria</button></div>
+      <img id="sPhotoPrev" alt="Foto del ticket" hidden>
+      <button type="button" class="link" id="sPhotoRemove" hidden>Quitar foto</button>
+    </fieldset>
+    <p id="sError" class="error" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="btn ghost" id="sCancel">Cancelar</button>
+      <button type="button" class="btn danger" id="sDelete" hidden>Borrar</button>
       <button type="submit" class="btn primary">Guardar</button>
     </div>
   </form>

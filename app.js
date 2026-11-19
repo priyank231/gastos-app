@@ -1,12 +1,11 @@
 import { MONTHS, SPREADS, eur, round2, pad, uid, localISO, defaultData, parseAmount, parsePlan, monthSummary,
   savingsStats, goalTotals, expensesCSV, validateBackup, daysInMonth } from './core.js';
+import { $, esc, dec, banner, toast, deliver } from './ui.js';
+import * as shared from './shared-ui.js';
 
 const KEY = 'gastos.v1';          // misma clave: validateBackup migra los datos antiguos
 const DEFAULT_CATS = ['Vivienda', 'Suministros', 'Transporte', 'Alimentación', 'Seguros e impuestos',
   'Personal', 'Ocio', 'Salud', 'Otros'];
-const $ = (s, r = document) => r.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const dec = (n) => String(n).replace('.', ',');
 const spreadLabel = (n) => (n === 1 ? 'Solo ese mes' : `En ${n} meses`);
 
 let data = load();
@@ -41,22 +40,6 @@ function save() {
 }
 try { navigator.storage?.persist?.(); } catch { /* opcional */ }
 
-function banner(msg) { const b = $('#banner'); b.textContent = msg; b.hidden = false; }
-let toastTimer;
-function toast(msg, actionLabel, fn, ms = 6000) {
-  const t = $('#toast');
-  t.replaceChildren(document.createTextNode(msg));
-  if (actionLabel) {
-    const b = document.createElement('button');
-    b.textContent = actionLabel;
-    b.onclick = () => { fn(); t.hidden = true; };
-    t.append(b);
-  }
-  t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, ms);
-}
-
 const catNames = () => {
   const names = new Set(data.categories.map((c) => c.name));
   data.expenses.forEach((e) => names.add(e.category));
@@ -68,12 +51,23 @@ const monthLabel = (y, m) => `${MONTHS[m - 1].slice(0, 3)} ${y}`;
 const inCurrentMonth = () => cur.y === t0.getFullYear() && cur.m === t0.getMonth() + 1;
 
 // ---------- vistas ----------
+let appMode = 'choose';              // choose | ind | shared (se pregunta en cada apertura)
+
 function render() {
-  $('#monthTitle').textContent = `${MONTHS[cur.m - 1]} ${cur.y}`;
+  const choosing = appMode === 'choose';
+  $('#chooser').hidden = !choosing;
+  for (const sel of ['.top', '.modebar', 'main', '.tabs']) document.querySelector(sel).hidden = choosing;
+  if (choosing) { $('#fab').hidden = true; return; }
+  const sh = appMode === 'shared';
+  $('#modeName').textContent = sh ? 'Modo compartido' : 'Modo individual';
+  $('#monthTitle').textContent = sh ? shared.title() : `${MONTHS[cur.m - 1]} ${cur.y}`;
+  const labels = sh ? shared.tabLabels() : { mes: 'Resumen', hist: 'Historial', ajustes: 'Ajustes' };
   document.querySelectorAll('.tabs button').forEach((b) => {
+    b.textContent = labels[b.dataset.tab];
     if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  $('#fab').hidden = tab === 'ajustes';
+  $('#fab').hidden = tab === 'ajustes' || (sh && !shared.hasGroup());
+  if (sh) { $('#view').innerHTML = shared.view(tab); shared.afterRender(tab); return; }
   $('#view').innerHTML = tab === 'mes' ? viewMes() : tab === 'hist' ? viewHist() : viewAjustes();
   if (tab === 'ajustes') bindAjustes();
 }
@@ -238,8 +232,8 @@ function bindAjustes() {
   $('#sAddPay').onclick = () => openPay();
   document.querySelectorAll('[data-pay]').forEach((el) => { el.onclick = () => openPay(el.dataset.pay); });
   $('#sXlsx').onchange = importExcel;
-  $('#sCsv').onclick = () => download('movimientos.csv', expensesCSV(data), 'text/csv');
-  $('#sJson').onclick = () => download(`gastos-copia-${localISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
+  $('#sCsv').onclick = () => send('movimientos.csv', expensesCSV(data), 'text/csv');
+  $('#sJson').onclick = () => send(`gastos-copia-${localISO()}.json`, JSON.stringify(data, null, 2), 'application/json');
   $('#sRestore').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
     try {
@@ -255,11 +249,9 @@ function bindAjustes() {
   };
 }
 
-function download(name, text, type) {
-  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+async function send(name, text, type) {
+  const r = await deliver(name, text, type);
+  if (r !== 'cancelled') toast(r === 'shared' ? 'Enviado' : 'Descargado (busca en Descargas / Archivos)');
 }
 
 // ---------- importar Excel (SheetJS bajo demanda) ----------
@@ -456,15 +448,21 @@ $('#pDelete').onclick = () => {
 };
 
 // ---------- navegacion ----------
-$('#fab').onclick = () => openForm('expense');
+$('#fab').onclick = () => (appMode === 'shared' ? shared.openAdd() : openForm('expense'));
 $('#view').addEventListener('click', (e) => {
   const it = e.target.closest('.item[data-type]');
   if (it) openForm(it.dataset.type, it.dataset.id);
 });
 document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => { tab = b.dataset.tab; render(); }; });
-const shift = (d) => { cur.m += d; if (cur.m < 1) { cur.m = 12; cur.y--; } if (cur.m > 12) { cur.m = 1; cur.y++; } render(); };
+const shift = (d) => {
+  if (appMode === 'shared') { shared.shift(d); render(); return; }
+  cur.m += d; if (cur.m < 1) { cur.m = 12; cur.y--; } if (cur.m > 12) { cur.m = 1; cur.y++; } render(); };
 $('#prev').onclick = () => shift(-1);
 $('#next').onclick = () => shift(1);
+
+document.querySelectorAll('[data-appmode]').forEach((b) => { b.onclick = () => { appMode = b.dataset.appmode; tab = 'mes'; render(); }; });
+$('#modeSwitch').onclick = () => { appMode = 'choose'; render(); };
+shared.init({ render });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 render();

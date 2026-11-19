@@ -3,5 +3,4 @@ node_modules/
 *.xlsm
 *.json.bak
 gastos-copia-*.json
-_seed.html
-_flow.html
+_*.html

@@ -1,6 +1,6 @@
 // Service worker: la app funciona sin conexion. Sube VERSION al cambiar archivos para forzar la actualizacion.
-const VERSION = 'gastos-v3';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'manifest.webmanifest', 'icon.svg'];
+const VERSION = 'gastos-v4';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'core.js', 'ui.js', 'photos.js', 'shared.js', 'shared-ui.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
