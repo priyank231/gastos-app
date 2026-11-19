@@ -3,6 +3,14 @@
 PWA minimalista para registrar el **gasto real del dia a dia** frente a tu **plan mensual**. Sin servidor, sin cuentas:
 los datos viven solo en el dispositivo (localStorage) y funciona sin conexion una vez cargada.
 
+## Lectura de tickets (en los dos modos)
+Haz una foto al ticket y la app **intenta leer importe, fecha, local y categoría** y rellena el formulario. Lo leído se marca (borde azul) y
+siempre lo revisas antes de guardar; si no se puede leer, lo rellenas a mano.
+- **Individual**: botón *Escanear ticket* (la foto solo se usa para leer, no se guarda).
+- **Compartido**: la foto se guarda con el gasto, se lee sola al añadirla (se puede desactivar en Ajustes) y hay botón *Leer el ticket* para repetirlo.
+- Se lee **en el móvil** (Tesseract.js + idioma español): la foto no se envía a ningún sitio. La primera vez descarga el lector (~7 MB, necesita conexión) y después queda en caché.
+- Es una ayuda, no magia: con fotos movidas, arrugadas o con poca luz se equivoca. Prueba hecha con un ticket sintético limpio (importe, fecha, local y categoría correctos); las fotos reales rinden peor.
+
 ## Dos modos (se pregunta al abrir)
 - **Individual**: tus gastos, privados, solo en tu movil (lo de abajo).
 - **Compartido** (tipo Splitwise para dos): gastos con **lugar/local, quien pago, reparto (mitad, todo para el otro u otro %), fecha, nota y foto del ticket**;
@@ -14,6 +22,7 @@ los datos viven solo en el dispositivo (localStorage) y funciona sin conexion un
 1. **Tu**: Compartido -> pon vuestros nombres -> Crear grupo -> Saldo -> *Enviar para fusionar* y mandaselo.
 2. **Tu pareja**: Compartido -> *Unirte con su archivo* (NO crea otro grupo). Desde ahi, "yo" es ella automaticamente.
 3. Cada cierto tiempo (fin de semana o mes): cada uno exporta y el otro importa (Ajustes -> *Recibir de tu pareja*). Reimportar el mismo archivo no duplica nada.
+4. Si no se pueden abrir archivos (por ejemplo, llegan por WhatsApp): **Copiar texto** (sin fotos) y **pegarlo** en Ajustes -> *Recibir*. Acepta el texto aunque venga con frases alrededor.
 
 ## Que hace (modo individual)
 - **Boton +** con tres pestanas: **Gasto**, **Ingreso extra** (paga extra, regalos...) y **Aportacion** a un objetivo de ahorro (p. ej. "Viaje", tu eliges importe, fecha y objetivo).
@@ -44,11 +53,12 @@ los datos viven solo en el dispositivo (localStorage) y funciona sin conexion un
 npm test                     # logica pura (core.js) con node --test
 python -m http.server 8099   # y abre http://127.0.0.1:8099
 ```
-Estructura: `core.js` y `shared.js` (logica, probadas) · `app.js` (individual) · `shared-ui.js` (compartido) · `ui.js` · `photos.js` (IndexedDB) · `sw.js` (offline, red primero) · `styles.css` · `index.html`.
+Estructura: `core.js`, `shared.js` y `ticket.js` (lógica, probadas) · `app.js` (individual) · `shared-ui.js` (compartido) · `ui.js` · `ocr.js` (lector de tickets) · `photos.js` (IndexedDB) · `sw.js` (offline, red primero) · `styles.css` · `index.html`.
 Los datos antiguos (v1) se migran solos al abrir la nueva version.
 
 ## Limitaciones
 - **Compartido no es en tiempo real**: hay que intercambiar archivos. Si los dos editan el MISMO gasto antes de fusionar, gana la edicion mas reciente segun el reloj de cada movil.
+- La lectura de tickets necesita conexión la primera vez y es aproximada.
 - Las categorias del modo compartido son fijas (Super, Comida fuera, Casa, Ocio, Viajes, Otros).
 - Los datos estan atados a UN dispositivo/navegador: si borras los datos del sitio, se pierden. Haz copia JSON de vez en cuando.
 - No sincroniza entre movil y PC.
